@@ -496,7 +496,9 @@ spec = do
         it "is valid" $ shouldBeValid entryFilter
         it "roundtrips" $
           let rendered = renderFilter entryFilter
-           in context (show rendered) $ parseEntryFilter rendered `shouldBe` Right entryFilter
+           in context (show rendered) $ case parseEntryFilter rendered of
+                Left err -> expectationFailure $ T.unpack $ prettyFilterParseError err
+                Right actual -> actual `shouldBe` entryFilter
 
 tcSpec :: (Show a, Eq a) => TC a -> Ast -> a -> Spec
 tcSpec tc ast a =

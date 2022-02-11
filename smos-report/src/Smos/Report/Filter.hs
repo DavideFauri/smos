@@ -700,7 +700,15 @@ entryFilterExamples =
       FilterSnd $ FilterWithinCursor $ FilterEntryProperties $ FilterMapVal "property" $ FilterMaybe False $ FilterSub "high'"
     ),
     ( "Select entries that have a 'timewindow' property that, when interpreted as an amount of time, is less than two hours:",
-      FilterSnd $ FilterWithinCursor $ FilterEntryProperties $ FilterMapVal "property" $ FilterMaybe False $ FilterPropertyTime $ FilterMaybe False $ FilterOrd LTC $ Hours 2
+      FilterSnd $
+        FilterWithinCursor $
+          FilterEntryProperties $
+            FilterMapVal "property" $
+              FilterMaybe False $
+                FilterPropertyTime $
+                  FilterMaybe False $
+                    FilterOrd LTC $
+                      Hours 2
     ),
     ( "Select entries whose parent have a 'work' tag:",
       FilterSnd $ FilterParent $ FilterWithinCursor $ FilterEntryTags $ FilterAny $ FilterSub "work"
