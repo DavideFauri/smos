@@ -10,6 +10,7 @@ module Smos.Report.FilterSpec
   )
 where
 
+import Control.Monad
 import Cursor.Forest.Gen ()
 import Cursor.Simple.Forest
 import Data.Functor.Identity
@@ -489,6 +490,13 @@ spec = do
                       (FilterAny $ FilterSub (fromJust $ tag "offline"))
                   )
       )
+  describe "examples" $
+    forM_ entryFilterExamples $ \(description, entryFilter) ->
+      describe (T.unpack description) $ do
+        it "is valid" $ shouldBeValid entryFilter
+        it "roundtrips" $
+          let rendered = renderFilter entryFilter
+           in context (show rendered) $ parseEntryFilter rendered `shouldBe` Right entryFilter
 
 tcSpec :: (Show a, Eq a) => TC a -> Ast -> a -> Spec
 tcSpec tc ast a =

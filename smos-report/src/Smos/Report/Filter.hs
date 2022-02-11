@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -651,10 +652,14 @@ instance HasCodec (Filter (Path Rel File, ForestCursor Entry)) where
 
 entryFilterDocs :: [Text]
 entryFilterDocs =
-  [ "",
-    "A filter is a string of one of the following forms:",
-    "",
-    "tag:<tag>",
+  [ "A filter is a string of one of the following forms:",
+    ""
+  ]
+    <> entryFilterFormsDocs
+
+entryFilterFormsDocs :: [Text]
+entryFilterFormsDocs =
+  [ "tag:<tag>",
     "state:<state>",
     "file:<file>",
     "level:<level>",
@@ -668,55 +673,63 @@ entryFilterDocs =
     "legacy:<filter>",
     "not:<filter>",
     "(<filter> and <filter>)",
-    "(<filter> or <filter>)",
-    "",
-    "Examples:",
-    "",
-    "Select entries that have the 'online' tag:",
-    "'tag:online'",
-    "",
-    "Select entries whose state is 'TODO':",
-    "'state:TODO'",
-    "",
-    "Select entries in a file whose filepath contains 'my-client.smos' as a substring:",
-    "'file:my-client.smos'",
-    "",
-    "Select entries on the fifth level in their file, down from the root:",
-    "'level:5'",
-    "",
-    "Select entries that contain the substring 'find' in their header:",
-    "'header:find'",
-    "",
-    "Select entries that have an 'effort' property:",
-    "'property:effort'",
-    "",
-    "Select entries that have an 'effort' property that contains 'high' as a substring:",
-    "'property:effort:high'",
-    "",
-    "Select entries that have a 'timewindow' property that, when interpreted as an amount of time, is less than two hours:",
-    "'property:timewindow:time:lt:2h'",
-    "",
-    "Select entries whose parent have a 'work' tag:",
-    "'parent:tag:work'",
-    "",
-    "Select entries that have an ancestor whose state is 'DONE':",
-    "'ancestor:state:DONE'",
-    "",
-    "Select entries that have a child that has a 'work' tag:",
-    "'child:tag:work'",
-    "",
-    "Select entries that whose legacy contains a child whose state is 'DONE':",
-    "'legacy:state:DONE'",
-    "",
-    "Select entries that do _not_ have a 'work' tag:",
-    "'not:tag:work'",
-    "",
-    "Select entries that have a 'work' tag _and_ also have the state 'NEXT':",
-    "'(tag:work and state:NEXT)'",
-    "",
-    "Select entries that are a root in their file _or_ have the state 'DONE':",
-    "'(level:0 or state:DONE)'",
-    ""
+    "(<filter> or <filter>)"
+  ]
+
+entryFilterExamples :: [(Text, EntryFilter)]
+entryFilterExamples =
+  [ ( "Select entries that have the 'online' tag:",
+      FilterSnd $ FilterWithinCursor $ FilterEntryTags $ FilterAny $ FilterSub $ Tag "online"
+    ),
+    ( "Select entries whose state is 'TODO':",
+      FilterSnd $ FilterWithinCursor $ FilterEntryTodoState $ FilterMaybe False $ FilterSub "TODO"
+    ),
+    ( "Select entries in a file whose filepath contains 'my-client.smos' as a substring:",
+      FilterFst $ FilterFile [relfile|my-client.smos|]
+    ),
+    ( "Select entries on the fifth level in their file, down from the root:",
+      FilterSnd $ FilterLevel 5
+    ),
+    ( "Select entries that contain the substring 'find' in their header:",
+      FilterSnd $ FilterWithinCursor $ FilterEntryHeader $ FilterSub $ Header "find"
+    ),
+    ( "Select entries that have an 'effort' property:",
+      FilterSnd $ FilterWithinCursor $ FilterEntryProperties $ FilterMapHas "effort"
+    ),
+    ( "Select entries that have an 'effort' property that contains 'high' as a substring:",
+      FilterSnd $ FilterWithinCursor $ FilterEntryProperties $ FilterMapVal "property" $ FilterMaybe False $ FilterSub "high'"
+    ),
+    ( "Select entries that have a 'timewindow' property that, when interpreted as an amount of time, is less than two hours:",
+      FilterSnd $ FilterWithinCursor $ FilterEntryProperties $ FilterMapVal "property" $ FilterMaybe False $ FilterPropertyTime $ FilterMaybe False $ FilterOrd LTC $ Hours 2
+    ),
+    ( "Select entries whose parent have a 'work' tag:",
+      FilterSnd $ FilterParent $ FilterWithinCursor $ FilterEntryTags $ FilterAny $ FilterSub "work"
+    ),
+    ( "Select entries that have an ancestor whose state is 'DONE':",
+      FilterSnd $ FilterAncestor $ FilterWithinCursor $ FilterEntryTodoState $ FilterMaybe False $ FilterSub "DONE"
+    ),
+    ( "Select entries that have a child that has a 'work' tag:",
+      FilterSnd $ FilterChild $ FilterWithinCursor $ FilterEntryTags $ FilterAny $ FilterSub "work"
+    ),
+    ( "Select entries that whose legacy contains a child whose state is 'DONE':",
+      FilterSnd $ FilterLegacy $ FilterWithinCursor $ FilterEntryTodoState $ FilterMaybe False $ FilterSub "DONE"
+    ),
+    ( "Select entries that do _not_ have a 'work' tag:",
+      FilterSnd $ FilterWithinCursor $ FilterNot $ FilterEntryTags $ FilterAny $ FilterSub "work"
+    ),
+    ( "Select entries that have a 'work' tag _and_ also have the state 'NEXT':",
+      FilterSnd $
+        FilterWithinCursor $
+          FilterAnd
+            (FilterEntryTags $ FilterAny $ FilterSub "work")
+            (FilterEntryTodoState $ FilterMaybe False $ FilterSub "NEXT")
+    ),
+    ( "Select entries that are a root in their file _or_ have the state 'DONE':",
+      FilterSnd $
+        FilterOr
+          (FilterLevel 0)
+          (FilterWithinCursor $ FilterEntryTodoState $ FilterMaybe False $ FilterSub "DONE")
+    )
   ]
 
 instance ToJSON (Filter (Path Rel File, ForestCursor Entry)) where
