@@ -84,7 +84,7 @@ spec = do
     ( makeSmosFile
         [ Node
             ( (newEntry "clocked in")
-                { entryLogbook = LogOpen (UTCTime (fromGregorian 2022 01 22) 1234) []
+                { entryLogbook = LogOpen (UTCTime (fromGregorian 2022 01 22) 1234.56) []
                 }
             )
             [],
@@ -93,8 +93,8 @@ spec = do
                 { entryLogbook =
                     LogClosed
                       [ LogbookEntry
-                          { logbookEntryStart = UTCTime (fromGregorian 2022 01 22) 1234,
-                            logbookEntryEnd = UTCTime (fromGregorian 2022 01 22) 1234
+                          { logbookEntryStart = UTCTime (fromGregorian 2022 01 22) 1234.56,
+                            logbookEntryEnd = UTCTime (fromGregorian 2022 01 22) 1234.56
                           }
                       ]
                 }
