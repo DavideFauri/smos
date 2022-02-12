@@ -45,6 +45,8 @@ spec = do
   jsonSpec @TimestampName
   textLikeJSONValid @TimestampName
   genValidSpec @Timestamp
+  eqSpec @Timestamp
+  ordSpec @Timestamp
   jsonSpec @Timestamp
   textLikeJSONValid @Timestamp
   describe "parseTimestampString" $
@@ -101,6 +103,8 @@ spec = do
           pure $ object ["start" .= start, "end" .= end]
      in oneof [withGen genLogbookEntryJSON, withGen genOrderedLogbookEntryJSON]
   genValidSpec @LogbookEntry
+  eqSpec @LogbookEntry
+  ordSpec @LogbookEntry
   jsonSpec @LogbookEntry
   genJSONValid @LogbookEntry genLogbookEntryJSON
   eqSpec @Entry

@@ -236,13 +236,13 @@ impreciseUtctimeCodec =
     localTimeCodec
 
 data Entry = Entry
-  { entryHeader :: Header,
-    entryContents :: Maybe Contents,
-    entryTimestamps :: Map TimestampName Timestamp, -- SCHEDULED, DEADLINE, etc.
-    entryProperties :: Map PropertyName PropertyValue,
-    entryStateHistory :: StateHistory, -- TODO, DONE, etc.
-    entryTags :: Set Tag, -- '@home', 'toast', etc.
-    entryLogbook :: Logbook
+  { entryHeader :: !Header,
+    entryContents :: !(Maybe Contents),
+    entryTimestamps :: !(Map TimestampName Timestamp), -- SCHEDULED, DEADLINE, etc.
+    entryProperties :: !(Map PropertyName PropertyValue),
+    entryStateHistory :: !StateHistory, -- TODO, DONE, etc.
+    entryTags :: !(Set Tag), -- '@home', 'toast', etc.
+    entryLogbook :: !Logbook
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving (ToJSON, FromJSON, ToYaml) via (Autodocodec Entry)
@@ -518,8 +518,8 @@ validateTimestampNameChar :: Char -> Validation
 validateTimestampNameChar = validateHeaderChar
 
 data Timestamp
-  = TimestampDay Day
-  | TimestampLocalTime LocalTime
+  = TimestampDay !Day
+  | TimestampLocalTime !LocalSecond
   deriving (Show, Eq, Ord, Generic)
   deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec Timestamp)
 
@@ -530,7 +530,8 @@ instance NFData Timestamp
 instance HasCodec Timestamp where
   codec =
     named "Timestamp" $
-      dimapCodec f g $ eitherCodec dayCodec localTimeCodec
+      dimapCodec f g $
+        eitherCodec dayCodec localSecondCodec
     where
       f = \case
         Left d -> TimestampDay d
@@ -594,13 +595,13 @@ timestampDay :: Timestamp -> Day
 timestampDay ts =
   case ts of
     TimestampDay d -> d
-    TimestampLocalTime (LocalTime d _) -> d
+    TimestampLocalTime (LocalSecond d _) -> d
 
 timestampLocalTime :: Timestamp -> LocalTime
 timestampLocalTime ts =
   case ts of
     TimestampDay d -> LocalTime d midnight
-    TimestampLocalTime lt -> lt
+    TimestampLocalTime lt -> localSecondLocalTime lt
 
 newtype TodoState = TodoState
   { todoStateText :: Text
@@ -664,8 +665,8 @@ nullStateHistory :: StateHistory -> Bool
 nullStateHistory = (== emptyStateHistory)
 
 data StateHistoryEntry = StateHistoryEntry
-  { stateHistoryEntryNewState :: Maybe TodoState,
-    stateHistoryEntryTimestamp :: UTCTime
+  { stateHistoryEntryNewState :: !(Maybe TodoState),
+    stateHistoryEntryTimestamp :: !UTCSecond
   }
   deriving stock (Show, Eq, Generic)
   deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec StateHistoryEntry)
@@ -738,8 +739,8 @@ validateTagChar c =
     ]
 
 data Logbook
-  = LogOpen UTCTime [LogbookEntry]
-  | LogClosed [LogbookEntry]
+  = LogOpen !UTCTime ![LogbookEntry]
+  | LogClosed ![LogbookEntry]
   deriving stock (Show, Eq, Ord, Generic)
   deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec Logbook)
 
@@ -836,8 +837,8 @@ logbookClosed =
     _ -> False
 
 data LogbookEntry = LogbookEntry
-  { logbookEntryStart :: UTCTime,
-    logbookEntryEnd :: UTCTime
+  { logbookEntryStart :: !UTCSecond,
+    logbookEntryEnd :: !UTCSecond
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec LogbookEntry)
@@ -876,3 +877,26 @@ instance HasCodec (Path Rel File) where
 
 instance ToYaml (Path Rel File) where
   toYaml = toYamlViaCodec
+
+type UTCSecond = LocalSecond
+
+utcSecondCodec :: JSONCodec UTCSecond
+utcSecondCodec = localSecondCodec
+
+data LocalSecond = LocalSecond
+  { localSecondDay :: !Day,
+    localSecondSecond :: !SecondOfDay
+  }
+  deriving stock (Show, Eq, Ord, Generic)
+
+newtype SecondOfDay = SecondOfDay
+  { unSecondOfDay :: Word
+  }
+  deriving stock (Show, Generic)
+  deriving newtype (Eq, Ord)
+
+localSecondCodec :: JSONCodec LocalSecond
+localSecondCodec = undefined
+
+localSecondLocalTime :: LocalSecond -> LocalTime
+localSecondLocalTime = undefined

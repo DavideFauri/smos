@@ -2,6 +2,6 @@
 # [32many of[m
 [ # %F
   [33m<string>[m
-, # %F %T%Q
+, # %F %T
   [33m<string>[m
 ]

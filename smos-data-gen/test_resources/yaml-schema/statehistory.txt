@@ -11,7 +11,7 @@
     # [32many of[m
     [ [37mtime[m: # [31mrequired[m
         # time at which the state change happened
-        # %F %T%Q
+        # %F %T
         [33m<string>[m
     , [37mtime[m: # [31mrequired[m
         # time at which the state change happened (legacy format)

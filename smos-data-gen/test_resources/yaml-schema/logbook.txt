@@ -5,7 +5,7 @@
   [37mstart[m: # [31mrequired[m
     # start of the logbook entry
     # [32many of[m
-    [ # %F %T%Q
+    [ # %F %T
       [33m<string>[m
     , # legacy format
       # [32many of[m
@@ -19,7 +19,7 @@
   [37mend[m: # [34moptional[m
     # end of the logbook entry
     # [32many of[m
-    [ # %F %T%Q
+    [ # %F %T
       [33m<string>[m
     , # legacy format
       # [32many of[m
