@@ -88,6 +88,9 @@ module Smos.Data.Types
     impreciseUtctimeCodec,
     getLocalTime,
     parseTimeEither,
+    LocalSecond (..),
+    localSecondToLocalTime,
+    localTimeToLocalSecond,
     SecondOfDay (..),
     secondOfDayToTimeOfDay,
     timeOfDayToSecondOfDay,
@@ -877,6 +880,28 @@ instance HasCodec (Path Rel File) where
 
 instance ToYaml (Path Rel File) where
   toYaml = toYamlViaCodec
+
+data LocalSecond = LocalSecond
+  { localSecondDay :: !Day,
+    localSecondOfDay :: !SecondOfDay
+  }
+  deriving stock (Show, Eq, Ord, Generic)
+
+instance Validity LocalSecond
+
+localSecondToLocalTime :: LocalSecond -> LocalTime
+localSecondToLocalTime LocalSecond {..} =
+  LocalTime
+    { localDay = localSecondDay,
+      localTimeOfDay = secondOfDayToTimeOfDay localSecondOfDay
+    }
+
+localTimeToLocalSecond :: LocalTime -> LocalSecond
+localTimeToLocalSecond LocalTime {..} =
+  LocalSecond
+    { localSecondDay = localDay,
+      localSecondOfDay = timeOfDayToSecondOfDay localTimeOfDay
+    }
 
 newtype SecondOfDay = SecondOfDay {unSecondOfDay :: Word32}
   deriving stock (Show, Generic)

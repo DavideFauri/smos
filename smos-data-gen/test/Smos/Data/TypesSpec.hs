@@ -111,6 +111,13 @@ spec = do
   eqSpec @SmosFile
   ordSpec @SmosFile
   jsonSpec @SmosFile
+  genValidSpec @LocalSecond
+  eqSpec @LocalSecond
+  ordSpec @LocalSecond
+  describe "localSecondToLocalTime" $
+    it "roundtrips with localTimeToLocalSecond" $
+      forAllValid $ \ls ->
+        localTimeToLocalSecond (localSecondToLocalTime ls) `shouldBe` ls
   genValidSpec @SecondOfDay
   eqSpec @SecondOfDay
   ordSpec @SecondOfDay

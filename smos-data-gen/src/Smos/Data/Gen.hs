@@ -168,6 +168,8 @@ instance GenValid LogbookEntry where
       pure LogbookEntry {logbookEntryStart = start, logbookEntryEnd = end}
   shrinkValid _ = [] -- There's no point.
 
+instance GenValid LocalSecond
+
 instance GenValid SecondOfDay where
   genValid = SecondOfDay <$> choose (0, 86400)
   shrinkValid = filter isValid . map SecondOfDay . shrinkValid . unSecondOfDay
