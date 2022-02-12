@@ -108,8 +108,16 @@ spec = do
   genValidSpec @Entry
   jsonSpec @Entry
   genValidSpec @SmosFile
+  eqSpec @SmosFile
   ordSpec @SmosFile
   jsonSpec @SmosFile
+  genValidSpec @SecondOfDay
+  eqSpec @SecondOfDay
+  ordSpec @SecondOfDay
+  describe "secondOfDayToTimeOfDay" $
+    it "roundtrips with timeOfDayToSecondOfDay" $
+      forAllValid $ \sod ->
+        timeOfDayToSecondOfDay (secondOfDayToTimeOfDay sod) `shouldBe` sod
 
 textLikeJSONValid ::
   forall a.

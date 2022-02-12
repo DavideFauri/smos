@@ -88,6 +88,9 @@ module Smos.Data.Types
     impreciseUtctimeCodec,
     getLocalTime,
     parseTimeEither,
+    SecondOfDay (..),
+    secondOfDayToTimeOfDay,
+    timeOfDayToSecondOfDay,
   )
 where
 
@@ -121,6 +124,7 @@ import Data.Validity
 import Data.Validity.Containers ()
 import Data.Validity.Text ()
 import Data.Validity.Time ()
+import Data.Word
 import Data.Yaml.Builder (ToYaml (..))
 import GHC.Generics (Generic)
 import Path
@@ -873,3 +877,20 @@ instance HasCodec (Path Rel File) where
 
 instance ToYaml (Path Rel File) where
   toYaml = toYamlViaCodec
+
+newtype SecondOfDay = SecondOfDay {unSecondOfDay :: Word32}
+  deriving stock (Show, Generic)
+  deriving newtype (Eq, Ord, NFData)
+
+instance Validity SecondOfDay where
+  validate sof@SecondOfDay {..} =
+    mconcat
+      [ genericValidate sof,
+        declare "the second is 86400 or less" $ unSecondOfDay <= 86400
+      ]
+
+secondOfDayToTimeOfDay :: SecondOfDay -> TimeOfDay
+secondOfDayToTimeOfDay = timeToTimeOfDay . realToFrac . unSecondOfDay
+
+timeOfDayToSecondOfDay :: TimeOfDay -> SecondOfDay
+timeOfDayToSecondOfDay = SecondOfDay . floor . timeOfDayToTime

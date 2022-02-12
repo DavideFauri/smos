@@ -167,3 +167,7 @@ instance GenValid LogbookEntry where
       let end = addUTCTime ndt start
       pure LogbookEntry {logbookEntryStart = start, logbookEntryEnd = end}
   shrinkValid _ = [] -- There's no point.
+
+instance GenValid SecondOfDay where
+  genValid = SecondOfDay <$> choose (0, 86400)
+  shrinkValid = filter isValid . map SecondOfDay . shrinkValid . unSecondOfDay
