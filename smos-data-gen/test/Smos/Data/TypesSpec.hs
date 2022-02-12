@@ -119,6 +119,10 @@ spec = do
     it "roundtrips with localTimeToLocalSecond" $
       forAllValid $ \ls ->
         localTimeToLocalSecond (localSecondToLocalTime ls) `shouldBe` ls
+  describe "utcSecondToUTCTime" $
+    it "roundtrips with utcTimeToUTCSecond" $
+      forAllValid $ \ls ->
+        utcTimeToUTCSecond (utcSecondToUTCTime ls) `shouldBe` ls
   describe "parseLocalSecondString" $ do
     it "parses whatever renderLocalSecondString" $
       forAllValid $ \ls ->
@@ -150,6 +154,10 @@ spec = do
     it "roundtrips with timeOfDayToSecondOfDay" $
       forAllValid $ \sod ->
         timeOfDayToSecondOfDay (secondOfDayToTimeOfDay sod) `shouldBe` sod
+  describe "secondOfDayToDiffTime" $
+    it "roundtrips with diffTimeToSecondOfDay" $
+      forAllValid $ \sod ->
+        diffTimeToSecondOfDay (secondOfDayToDiffTime sod) `shouldBe` sod
 
 textLikeJSONValid ::
   forall a.

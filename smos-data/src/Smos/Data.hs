@@ -235,11 +235,12 @@ logbookClockIn :: UTCTime -> Logbook -> Maybe Logbook
 logbookClockIn now lb =
   case lb of
     LogClosed es ->
-      let d = constructValid $ LogOpen now es
+      let utcs = utcTimeToUTCSecond now
+          d = constructValid $ LogOpen utcs es
        in case es of
             [] -> d
             (LogbookEntry {..} : rest) ->
-              if logbookEntryEnd == now
+              if logbookEntryEnd == utcs
                 then Just $ LogOpen logbookEntryStart rest
                 else d
     LogOpen {} -> Nothing
@@ -248,7 +249,7 @@ logbookClockOut :: UTCTime -> Logbook -> Maybe Logbook
 logbookClockOut now lb =
   case lb of
     LogClosed {} -> Nothing
-    LogOpen start es -> constructValid $ LogClosed $ LogbookEntry start now : es
+    LogOpen start es -> constructValid $ LogClosed $ LogbookEntry start (utcTimeToUTCSecond now) : es
 
 stateHistoryState :: StateHistory -> Maybe TodoState
 stateHistoryState (StateHistory tups) =

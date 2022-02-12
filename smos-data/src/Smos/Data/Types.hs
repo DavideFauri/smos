@@ -91,6 +91,8 @@ module Smos.Data.Types
     LocalSecond (..),
     localSecondToLocalTime,
     localTimeToLocalSecond,
+    utcSecondToUTCTime,
+    utcTimeToUTCSecond,
     parseLocalSecondString,
     parseLocalSecondText,
     renderLocalSecondString,
@@ -98,6 +100,8 @@ module Smos.Data.Types
     SecondOfDay (..),
     secondOfDayToTimeOfDay,
     timeOfDayToSecondOfDay,
+    diffTimeToSecondOfDay,
+    secondOfDayToDiffTime,
   )
 where
 
@@ -746,8 +750,8 @@ validateTagChar c =
     ]
 
 data Logbook
-  = LogOpen UTCTime [LogbookEntry]
-  | LogClosed [LogbookEntry]
+  = LogOpen !UTCSecond ![LogbookEntry]
+  | LogClosed ![LogbookEntry]
   deriving stock (Show, Eq, Ord, Generic)
   deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec Logbook)
 
@@ -791,26 +795,12 @@ instance HasCodec Logbook where
                  "Only the first element of this list has an optional 'end'."
                ]
     where
-      tupCodec :: JSONCodec (UTCTime, Maybe UTCTime)
+      tupCodec :: JSONCodec (UTCSecond, Maybe UTCSecond)
       tupCodec =
         object "LogbookEntry" $
           (,)
-            <$> requiredFieldWith
-              "start"
-              ( parseAlternative
-                  impreciseUtctimeCodec
-                  (utctimeCodec <?> "legacy format")
-              )
-              "start of the logbook entry"
-              .= fst
-            <*> optionalFieldWith
-              "end"
-              ( parseAlternative
-                  impreciseUtctimeCodec
-                  (utctimeCodec <?> "legacy format")
-              )
-              "end of the logbook entry"
-              .= snd
+            <$> requiredField "start" "start of the logbook entry" .= fst
+            <*> optionalField "end" "end of the logbook entry" .= snd
       f es = case NE.nonEmpty es of
         Nothing -> Right $ LogClosed []
         Just ((start, mEnd) :| rest) -> do
@@ -844,8 +834,8 @@ logbookClosed =
     _ -> False
 
 data LogbookEntry = LogbookEntry
-  { logbookEntryStart :: UTCTime,
-    logbookEntryEnd :: UTCTime
+  { logbookEntryStart :: UTCSecond,
+    logbookEntryEnd :: UTCSecond
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec LogbookEntry)
@@ -865,11 +855,14 @@ instance HasCodec LogbookEntry where
       bimapCodec prettyValidate id $
         object "LogbookEntry" $
           LogbookEntry
-            <$> requiredFieldWith "start" utctimeCodec "start of the logbook entry" .= logbookEntryStart
-            <*> requiredFieldWith "end" utctimeCodec "end of the logbook entry" .= logbookEntryEnd
+            <$> requiredField "start" "start of the logbook entry" .= logbookEntryStart
+            <*> requiredField "end" "end of the logbook entry" .= logbookEntryEnd
 
 logbookEntryDiffTime :: LogbookEntry -> NominalDiffTime
-logbookEntryDiffTime LogbookEntry {..} = diffUTCTime logbookEntryEnd logbookEntryStart
+logbookEntryDiffTime LogbookEntry {..} =
+  diffUTCTime
+    (utcSecondToUTCTime logbookEntryEnd)
+    (utcSecondToUTCTime logbookEntryStart)
 
 type UTCSecond = LocalSecond
 
@@ -881,6 +874,8 @@ data LocalSecond = LocalSecond
   deriving (FromJSON, ToJSON) via (Autodocodec LocalSecond)
 
 instance Validity LocalSecond
+
+instance NFData LocalSecond
 
 instance HasCodec LocalSecond where
   codec =
@@ -899,6 +894,20 @@ localTimeToLocalSecond LocalTime {..} =
   LocalSecond
     { localSecondDay = localDay,
       localSecondOfDay = timeOfDayToSecondOfDay localTimeOfDay
+    }
+
+utcSecondToUTCTime :: UTCSecond -> UTCTime
+utcSecondToUTCTime LocalSecond {..} =
+  UTCTime
+    { utctDay = localSecondDay,
+      utctDayTime = secondOfDayToDiffTime localSecondOfDay
+    }
+
+utcTimeToUTCSecond :: UTCTime -> UTCSecond
+utcTimeToUTCSecond UTCTime {..} =
+  LocalSecond
+    { localSecondDay = utctDay,
+      localSecondOfDay = diffTimeToSecondOfDay utctDayTime
     }
 
 parseLocalSecondString :: String -> Either String LocalSecond
@@ -929,6 +938,12 @@ secondOfDayToTimeOfDay = timeToTimeOfDay . realToFrac . unSecondOfDay
 
 timeOfDayToSecondOfDay :: TimeOfDay -> SecondOfDay
 timeOfDayToSecondOfDay = SecondOfDay . floor . timeOfDayToTime
+
+diffTimeToSecondOfDay :: DiffTime -> SecondOfDay
+diffTimeToSecondOfDay = undefined
+
+secondOfDayToDiffTime :: SecondOfDay -> DiffTime
+secondOfDayToDiffTime = undefined
 
 getLocalTime :: IO LocalTime
 getLocalTime = (\zt -> utcToLocalTime (zonedTimeZone zt) (zonedTimeToUTC zt)) <$> getZonedTime
