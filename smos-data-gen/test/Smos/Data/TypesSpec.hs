@@ -114,10 +114,35 @@ spec = do
   genValidSpec @LocalSecond
   eqSpec @LocalSecond
   ordSpec @LocalSecond
+  jsonSpec @LocalSecond
   describe "localSecondToLocalTime" $
     it "roundtrips with localTimeToLocalSecond" $
       forAllValid $ \ls ->
         localTimeToLocalSecond (localSecondToLocalTime ls) `shouldBe` ls
+  describe "parseLocalSecondString" $ do
+    it "parses whatever renderLocalSecondString" $
+      forAllValid $ \ls ->
+        parseLocalSecondString (renderLocalSecondString ls) `shouldBe` Right ls
+    describe "can parse these examples from data formats that have been used" $ do
+      let expected = LocalSecond {localSecondDay = fromGregorian 2022 01 22, localSecondOfDay = SecondOfDay 1234}
+      let p s = it ("can parse " <> show s) $ parseLocalSecondString s `shouldBe` Right expected
+      p "2022-01-22 00:20:34.000000000000"
+      p "2022-01-22 00:20:34.00000000000"
+      p "2022-01-22 00:20:34.0000000000"
+      p "2022-01-22 00:20:34.000000000"
+      p "2022-01-22 00:20:34.00000000"
+      p "2022-01-22 00:20:34.0000000"
+      p "2022-01-22 00:20:34.000000"
+      p "2022-01-22 00:20:34.00000"
+      p "2022-01-22 00:20:34.0000"
+      p "2022-01-22 00:20:34.000"
+      p "2022-01-22 00:20:34.00"
+      p "2022-01-22 00:20:34.0"
+      p "2022-01-22 00:20:34"
+  describe "parseLocalSecondText" $
+    it "parses whatever renderLocalSecondText" $
+      forAllValid $ \ls ->
+        parseLocalSecondText (renderLocalSecondText ls) `shouldBe` Right ls
   genValidSpec @SecondOfDay
   eqSpec @SecondOfDay
   ordSpec @SecondOfDay

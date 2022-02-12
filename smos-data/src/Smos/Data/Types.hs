@@ -91,6 +91,10 @@ module Smos.Data.Types
     LocalSecond (..),
     localSecondToLocalTime,
     localTimeToLocalSecond,
+    parseLocalSecondString,
+    parseLocalSecondText,
+    renderLocalSecondString,
+    renderLocalSecondText,
     SecondOfDay (..),
     secondOfDayToTimeOfDay,
     timeOfDayToSecondOfDay,
@@ -867,27 +871,21 @@ instance HasCodec LogbookEntry where
 logbookEntryDiffTime :: LogbookEntry -> NominalDiffTime
 logbookEntryDiffTime LogbookEntry {..} = diffUTCTime logbookEntryEnd logbookEntryStart
 
-getLocalTime :: IO LocalTime
-getLocalTime = (\zt -> utcToLocalTime (zonedTimeZone zt) (zonedTimeToUTC zt)) <$> getZonedTime
-
-parseTimeEither :: ParseTime a => TimeLocale -> String -> String -> Either String a
-parseTimeEither locale format string = case parseTimeM True locale format string of
-  Nothing -> Left $ "Failed to parse time value: " <> string <> " via " <> format
-  Just r -> Right r
-
-instance HasCodec (Path Rel File) where
-  codec = bimapCodec (left show . parseRelFile) fromRelFile codec
-
-instance ToYaml (Path Rel File) where
-  toYaml = toYamlViaCodec
+type UTCSecond = LocalSecond
 
 data LocalSecond = LocalSecond
   { localSecondDay :: !Day,
     localSecondOfDay :: !SecondOfDay
   }
   deriving stock (Show, Eq, Ord, Generic)
+  deriving (FromJSON, ToJSON) via (Autodocodec LocalSecond)
 
 instance Validity LocalSecond
+
+instance HasCodec LocalSecond where
+  codec =
+    named "Timestamp" $
+      bimapCodec parseLocalSecondString renderLocalSecondString codec <?> "Of the form '%F %T'"
 
 localSecondToLocalTime :: LocalSecond -> LocalTime
 localSecondToLocalTime LocalSecond {..} =
@@ -902,6 +900,18 @@ localTimeToLocalSecond LocalTime {..} =
     { localSecondDay = localDay,
       localSecondOfDay = timeOfDayToSecondOfDay localTimeOfDay
     }
+
+parseLocalSecondString :: String -> Either String LocalSecond
+parseLocalSecondString = fmap localTimeToLocalSecond . parseTimeEither defaultTimeLocale "%F %T%Q"
+
+parseLocalSecondText :: Text -> Either String LocalSecond
+parseLocalSecondText = parseLocalSecondString . T.unpack
+
+renderLocalSecondString :: LocalSecond -> String
+renderLocalSecondString = formatTime defaultTimeLocale "%F %T" . localSecondToLocalTime
+
+renderLocalSecondText :: LocalSecond -> Text
+renderLocalSecondText = T.pack . renderLocalSecondString
 
 newtype SecondOfDay = SecondOfDay {unSecondOfDay :: Word32}
   deriving stock (Show, Generic)
@@ -919,3 +929,17 @@ secondOfDayToTimeOfDay = timeToTimeOfDay . realToFrac . unSecondOfDay
 
 timeOfDayToSecondOfDay :: TimeOfDay -> SecondOfDay
 timeOfDayToSecondOfDay = SecondOfDay . floor . timeOfDayToTime
+
+getLocalTime :: IO LocalTime
+getLocalTime = (\zt -> utcToLocalTime (zonedTimeZone zt) (zonedTimeToUTC zt)) <$> getZonedTime
+
+parseTimeEither :: ParseTime a => TimeLocale -> String -> String -> Either String a
+parseTimeEither locale format string = case parseTimeM True locale format string of
+  Nothing -> Left $ "Failed to parse time value: " <> string <> " via " <> format
+  Just r -> Right r
+
+instance HasCodec (Path Rel File) where
+  codec = bimapCodec (left show . parseRelFile) fromRelFile codec
+
+instance ToYaml (Path Rel File) where
+  toYaml = toYamlViaCodec
