@@ -26,3 +26,4 @@
     some info with no state 
   ❯ NEXT thing to do
   ```
+* `smos-data-gen`: Simplified the `GenValid` instance instance for `Logbook.

@@ -65,7 +65,6 @@ module Smos.Data.Types
     logbookOpen,
     logbookClosed,
     LogbookEntry (..),
-    logbookEntryDiffTime,
     TimestampName (..),
     timestampName,
     parseTimestampName,
@@ -75,33 +74,35 @@ module Smos.Data.Types
     Timestamp (..),
     timestampString,
     timestampText,
-    timestampPrettyString,
-    timestampPrettyText,
     dayCodec,
     localTimeCodec,
     parseTimestampString,
     parseTimestampText,
     timestampDay,
     timestampLocalTime,
+    timestampLocalSecond,
     utctimeFormat,
     utctimeCodec,
     impreciseUtctimeCodec,
     getLocalTime,
     parseTimeEither,
     LocalSecond (..),
-    localSecondToLocalTime,
-    localTimeToLocalSecond,
-    utcSecondToUTCTime,
-    utcTimeToUTCSecond,
     parseLocalSecondString,
     parseLocalSecondText,
     renderLocalSecondString,
     renderLocalSecondText,
+    localSecondToLocalTime,
+    localTimeToLocalSecond,
+    UTCSecond,
+    utcSecondToUTCTime,
+    utcTimeToUTCSecond,
+    utcSecondToLocalSecond,
+    localSecondToUTCSecond,
     SecondOfDay (..),
     secondOfDayToTimeOfDay,
     timeOfDayToSecondOfDay,
-    diffTimeToSecondOfDay,
     secondOfDayToDiffTime,
+    diffTimeToSecondOfDay,
   )
 where
 
@@ -531,7 +532,7 @@ validateTimestampNameChar = validateHeaderChar
 
 data Timestamp
   = TimestampDay Day
-  | TimestampLocalTime LocalTime
+  | TimestampLocalSecond LocalSecond
   deriving (Show, Eq, Ord, Generic)
   deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec Timestamp)
 
@@ -542,14 +543,14 @@ instance NFData Timestamp
 instance HasCodec Timestamp where
   codec =
     named "Timestamp" $
-      dimapCodec f g $ eitherCodec dayCodec localTimeCodec
+      dimapCodec f g $ eitherCodec dayCodec codec
     where
       f = \case
         Left d -> TimestampDay d
-        Right lt -> TimestampLocalTime lt
+        Right lt -> TimestampLocalSecond lt
       g = \case
         TimestampDay d -> Left d
-        TimestampLocalTime lt -> Right lt
+        TimestampLocalSecond lt -> Right lt
 
 dayCodec :: JSONCodec Day
 dayCodec =
@@ -573,46 +574,40 @@ localTimeCodec =
 timestampLocalTimeFormat :: String
 timestampLocalTimeFormat = "%F %T%Q"
 
-timestampLocalTimePrettyFormat :: String
-timestampLocalTimePrettyFormat = "%F %T"
-
 timestampString :: Timestamp -> String
 timestampString ts =
   case ts of
     TimestampDay d -> formatTime defaultTimeLocale timestampDayFormat d
-    TimestampLocalTime lt -> formatTime defaultTimeLocale timestampLocalTimeFormat lt
+    TimestampLocalSecond ls -> renderLocalSecondString ls
 
 timestampText :: Timestamp -> Text
 timestampText = T.pack . timestampString
 
-timestampPrettyString :: Timestamp -> String
-timestampPrettyString ts =
-  case ts of
-    TimestampDay d -> formatTime defaultTimeLocale timestampDayFormat d
-    TimestampLocalTime lt -> formatTime defaultTimeLocale timestampLocalTimePrettyFormat lt
-
-timestampPrettyText :: Timestamp -> Text
-timestampPrettyText = T.pack . timestampPrettyString
-
-parseTimestampString :: String -> Maybe Timestamp
+parseTimestampString :: String -> Either String Timestamp
 parseTimestampString s =
-  (TimestampDay <$> parseTimeM False defaultTimeLocale timestampDayFormat s)
-    <|> (TimestampLocalTime <$> parseTimeM False defaultTimeLocale timestampLocalTimeFormat s)
+  (TimestampDay <$> parseTimeEither defaultTimeLocale timestampDayFormat s)
+    <|> (TimestampLocalSecond <$> parseLocalSecondString s)
 
-parseTimestampText :: Text -> Maybe Timestamp
+parseTimestampText :: Text -> Either String Timestamp
 parseTimestampText = parseTimestampString . T.unpack
 
 timestampDay :: Timestamp -> Day
 timestampDay ts =
   case ts of
     TimestampDay d -> d
-    TimestampLocalTime (LocalTime d _) -> d
+    TimestampLocalSecond (LocalSecond d _) -> d
 
 timestampLocalTime :: Timestamp -> LocalTime
 timestampLocalTime ts =
   case ts of
     TimestampDay d -> LocalTime d midnight
-    TimestampLocalTime lt -> lt
+    TimestampLocalSecond ls -> localSecondToLocalTime ls
+
+timestampLocalSecond :: Timestamp -> LocalSecond
+timestampLocalSecond ts =
+  case ts of
+    TimestampDay d -> LocalSecond d (SecondOfDay 0)
+    TimestampLocalSecond ls -> ls
 
 newtype TodoState = TodoState
   { todoStateText :: Text
@@ -858,12 +853,6 @@ instance HasCodec LogbookEntry where
             <$> requiredField "start" "start of the logbook entry" .= logbookEntryStart
             <*> requiredField "end" "end of the logbook entry" .= logbookEntryEnd
 
-logbookEntryDiffTime :: LogbookEntry -> NominalDiffTime
-logbookEntryDiffTime LogbookEntry {..} =
-  diffUTCTime
-    (utcSecondToUTCTime logbookEntryEnd)
-    (utcSecondToUTCTime logbookEntryStart)
-
 type UTCSecond = LocalSecond
 
 data LocalSecond = LocalSecond
@@ -889,6 +878,9 @@ localSecondToLocalTime LocalSecond {..} =
       localTimeOfDay = secondOfDayToTimeOfDay localSecondOfDay
     }
 
+-- |
+--
+-- NOTE: Loses sub-second precision
 localTimeToLocalSecond :: LocalTime -> LocalSecond
 localTimeToLocalSecond LocalTime {..} =
   LocalSecond
@@ -903,12 +895,19 @@ utcSecondToUTCTime LocalSecond {..} =
       utctDayTime = secondOfDayToDiffTime localSecondOfDay
     }
 
+-- NOTE: Loses sub-second precision
 utcTimeToUTCSecond :: UTCTime -> UTCSecond
 utcTimeToUTCSecond UTCTime {..} =
   LocalSecond
     { localSecondDay = utctDay,
       localSecondOfDay = diffTimeToSecondOfDay utctDayTime
     }
+
+utcSecondToLocalSecond :: TimeZone -> UTCSecond -> LocalSecond
+utcSecondToLocalSecond tz = localTimeToLocalSecond . utcToLocalTime tz . utcSecondToUTCTime
+
+localSecondToUTCSecond :: TimeZone -> LocalSecond -> UTCSecond
+localSecondToUTCSecond tz = utcTimeToUTCSecond . localTimeToUTC tz . localSecondToLocalTime
 
 parseLocalSecondString :: String -> Either String LocalSecond
 parseLocalSecondString = fmap localTimeToLocalSecond . parseTimeEither defaultTimeLocale "%F %T%Q"
@@ -939,11 +938,11 @@ secondOfDayToTimeOfDay = timeToTimeOfDay . realToFrac . unSecondOfDay
 timeOfDayToSecondOfDay :: TimeOfDay -> SecondOfDay
 timeOfDayToSecondOfDay = SecondOfDay . floor . timeOfDayToTime
 
-diffTimeToSecondOfDay :: DiffTime -> SecondOfDay
-diffTimeToSecondOfDay = undefined
-
 secondOfDayToDiffTime :: SecondOfDay -> DiffTime
-secondOfDayToDiffTime = undefined
+secondOfDayToDiffTime = fromIntegral . unSecondOfDay
+
+diffTimeToSecondOfDay :: DiffTime -> SecondOfDay
+diffTimeToSecondOfDay = SecondOfDay . floor
 
 getLocalTime :: IO LocalTime
 getLocalTime = (\zt -> utcToLocalTime (zonedTimeZone zt) (zonedTimeToUTC zt)) <$> getZonedTime

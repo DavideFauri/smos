@@ -4,6 +4,7 @@
 
 module Smos.Data.Gen where
 
+import Data.Foldable
 import Data.GenValidity
 import Data.GenValidity.Containers ()
 import Data.GenValidity.Text
@@ -123,40 +124,16 @@ genTagChar :: Gen Char
 genTagChar = choose (minBound, maxBound) `suchThat` validTagChar
 
 instance GenValid Logbook where
-  genValid =
-    let genPositiveNominalDiffTime = realToFrac . abs <$> (genValid :: Gen Rational)
-        listOfLogbookEntries =
-          sized $ \n -> do
-            ss <- arbPartition n
-            let go [] = pure []
-                go (s : rest) = do
-                  lbes <- go rest
-                  cur <-
-                    resize s $
-                      case lbes of
-                        [] -> genValid
-                        (p : _) ->
-                          sized $ \m -> do
-                            (a, b) <- genSplit m
-                            ndt1 <- resize a genPositiveNominalDiffTime
-                            ndt2 <- resize b genPositiveNominalDiffTime
-                            let start = addUTCTime ndt1 (logbookEntryEnd p)
-                                end = addUTCTime ndt2 start
-                            pure $ LogbookEntry {logbookEntryStart = start, logbookEntryEnd = end}
-                  pure $ cur : lbes
-            go ss
-     in oneof
-          [ LogClosed <$> listOfLogbookEntries,
-            do
-              lbes <- listOfLogbookEntries
-              l <-
-                case lbes of
-                  [] -> genValid
-                  (lbe : _) -> do
-                    ndt <- genPositiveNominalDiffTime
-                    pure $ addUTCTime ndt $ logbookEntryEnd lbe
-              pure $ LogOpen l lbes
-          ]
+  genValid = do
+    -- A list of local seconds from new to old
+    localSecondVals <- sort <$> genValid
+    -- Accumulate a logbook by adding the next timestamp every time
+    pure $ foldl' go (LogClosed []) localSecondVals
+    where
+      go :: Logbook -> LocalSecond -> Logbook
+      go lb ls = case lb of
+        LogClosed les -> LogOpen ls les
+        LogOpen le les -> LogClosed $ LogbookEntry {logbookEntryStart = le, logbookEntryEnd = ls} : les
 
 instance GenValid LogbookEntry where
   genValid =
@@ -165,7 +142,11 @@ instance GenValid LogbookEntry where
       start <- resize a genValid
       ndt <- resize b $ realToFrac . abs <$> (genValid :: Gen Rational)
       let end = addUTCTime ndt start
-      pure LogbookEntry {logbookEntryStart = start, logbookEntryEnd = end}
+      pure
+        LogbookEntry
+          { logbookEntryStart = utcTimeToUTCSecond start,
+            logbookEntryEnd = utcTimeToUTCSecond end
+          }
   shrinkValid _ = [] -- There's no point.
 
 instance GenValid LocalSecond

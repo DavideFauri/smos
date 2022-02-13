@@ -50,11 +50,11 @@ spec = do
   describe "parseTimestampString" $
     it "parses whatever timestampString outputs" $
       forAllValid $
-        \ts -> parseTimestampString (timestampString ts) `shouldBe` Just ts
+        \ts -> parseTimestampString (timestampString ts) `shouldBe` Right ts
   describe "parseTimestampText" $
     it "parses whatever timestampText outputs" $
       forAllValid $
-        \ts -> parseTimestampText (timestampText ts) `shouldBe` Just ts
+        \ts -> parseTimestampText (timestampText ts) `shouldBe` Right ts
   genValidSpec @TodoState
   jsonSpec @TodoState
   textLikeJSONValid @TodoState
@@ -123,6 +123,17 @@ spec = do
     it "roundtrips with utcTimeToUTCSecond" $
       forAllValid $ \ls ->
         utcTimeToUTCSecond (utcSecondToUTCTime ls) `shouldBe` ls
+  xdescribe "these fail for reasons related to timezone generation" $ do
+    describe "utcSecondToLocalSecond" $
+      it "roundtrips with localSecondToUTCSecond" $
+        forAllValid $ \tz ->
+          forAllValid $ \utcs ->
+            localSecondToUTCSecond tz (utcSecondToLocalSecond tz utcs) `shouldBe` utcs
+    describe "localSecondToUTCSecond" $
+      it "roundtrips with utcSecondToLocalSecond" $
+        forAllValid $ \tz ->
+          forAllValid $ \utcs ->
+            utcSecondToLocalSecond tz (localSecondToUTCSecond tz utcs) `shouldBe` utcs
   describe "parseLocalSecondString" $ do
     it "parses whatever renderLocalSecondString" $
       forAllValid $ \ls ->

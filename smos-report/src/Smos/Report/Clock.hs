@@ -66,7 +66,7 @@ findFileTimes now rp sf = do
 findHeaderTimes :: UTCTime -> Entry -> HeaderTimes []
 findHeaderTimes now Entry {..} =
   case entryLogbook of
-    LogOpen s es -> ht $ (LogbookEntry {logbookEntryStart = s, logbookEntryEnd = now}) : es
+    LogOpen s es -> ht $ (LogbookEntry {logbookEntryStart = s, logbookEntryEnd = utcTimeToUTCSecond now}) : es
     LogClosed es -> ht es
   where
     ht es = HeaderTimes {headerTimesHeader = entryHeader, headerTimesEntries = es}
@@ -192,21 +192,21 @@ trimLogbookEntryToM tz mBegin mEnd LogbookEntry {..} =
       { logbookEntryStart = case mBegin of
           Nothing -> logbookEntryStart
           Just begin ->
-            if toLocal logbookEntryStart >= begin
+            if toLocal (utcSecondToUTCTime logbookEntryStart) >= begin
               then logbookEntryStart
               else fromLocal begin,
         logbookEntryEnd = case mEnd of
           Nothing -> logbookEntryEnd
           Just end ->
-            if toLocal logbookEntryEnd < end
+            if toLocal (utcSecondToUTCTime logbookEntryEnd) < end
               then logbookEntryEnd
               else fromLocal end
       }
   where
     toLocal :: UTCTime -> LocalTime
     toLocal = utcToLocalTime tz
-    fromLocal :: LocalTime -> UTCTime
-    fromLocal = localTimeToUTC tz
+    fromLocal :: LocalTime -> UTCSecond
+    fromLocal = utcTimeToUTCSecond . localTimeToUTC tz
 
 divideIntoClockTimeBlocks :: ZonedTime -> TimeBlock -> [FileTimes] -> [ClockTimeBlock Text]
 divideIntoClockTimeBlocks zt cb cts =
@@ -225,7 +225,11 @@ divideIntoClockTimeBlocks zt cb cts =
           concatMap
             ( divideClockTimeIntoBlocks
                 zt
-                (fromDay . localDay . utcToLocalTime (zonedTimeZone zt))
+                ( fromDay
+                    . localDay
+                    . utcToLocalTime (zonedTimeZone zt)
+                    . utcSecondToUTCTime
+                )
                 toPeriod
             )
             cts
@@ -234,7 +238,7 @@ divideClockTimeIntoBlocks ::
   forall t.
   (Enum t, Ord t) =>
   ZonedTime ->
-  (UTCTime -> t) ->
+  (UTCSecond -> t) ->
   (t -> Period) ->
   FileTimes ->
   [ClockTimeBlock t]
@@ -315,10 +319,7 @@ makeClockTableHeaderEntry HeaderTimes {..} =
     }
 
 sumLogbookEntryTime :: [LogbookEntry] -> NominalDiffTime
-sumLogbookEntryTime = foldl' (+) 0 . map go
-  where
-    go :: LogbookEntry -> NominalDiffTime
-    go LogbookEntry {..} = diffUTCTime logbookEntryEnd logbookEntryStart
+sumLogbookEntryTime = foldl' (+) 0 . map logbookEntryDiffTime
 
 trimFileTimes :: ZonedTime -> Period -> FileTimes -> Maybe FileTimes
 trimFileTimes zt cp fts = do

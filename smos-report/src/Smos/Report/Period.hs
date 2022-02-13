@@ -8,6 +8,7 @@ import Data.Time.Calendar.WeekDate
 import Data.Validity
 import Data.Validity.Time ()
 import GHC.Generics (Generic)
+import Smos.Data
 import Smos.Report.TimeBlock
 
 data Period
@@ -24,9 +25,9 @@ data Period
   | ThisYear
   | NextYear
   | AllTime
-  | BeginOnly LocalTime
-  | EndOnly LocalTime
-  | BeginEnd LocalTime LocalTime -- If end is before begin, this matches nothing
+  | BeginOnly LocalSecond
+  | EndOnly LocalSecond
+  | BeginEnd LocalSecond LocalSecond -- If end is before begin, this matches nothing
   deriving (Show, Eq, Generic)
 
 instance Validity Period
@@ -34,36 +35,52 @@ instance Validity Period
 yearPeriod :: YearNumber -> Period
 yearPeriod y = BeginEnd monthStart monthEnd
   where
-    monthStart :: LocalTime
-    monthStart = LocalTime (fromGregorian y 1 1) midnight
-    monthEnd :: LocalTime
-    monthEnd = LocalTime (fromGregorian (y + 1) 1 1) midnight
+    monthStart :: LocalSecond
+    monthStart =
+      LocalSecond
+        (fromGregorian y 1 1)
+        (SecondOfDay 0)
+    monthEnd :: LocalSecond
+    monthEnd =
+      LocalSecond
+        (fromGregorian (y + 1) 1 1)
+        (SecondOfDay 0)
 
 monthPeriod :: MonthNumber -> Period
 monthPeriod MonthNumber {..} = BeginEnd monthStart monthEnd
   where
-    monthStart :: LocalTime
-    monthStart = LocalTime (fromGregorian monthNumberYear monthNumberMonth 1) midnight
-    monthEnd :: LocalTime
+    monthStart :: LocalSecond
+    monthStart =
+      LocalSecond
+        (fromGregorian monthNumberYear monthNumberMonth 1)
+        (SecondOfDay 0)
+    monthEnd :: LocalSecond
     monthEnd =
-      LocalTime (fromGregorian monthNumberYear (monthNumberMonth + 1) 1) midnight -- FIXME this can wrong at the end of the year
+      LocalSecond
+        (fromGregorian monthNumberYear (monthNumberMonth + 1) 1)
+        (SecondOfDay 0) -- FIXME this can wrong at the end of the year
 
 weekPeriod :: WeekNumber -> Period
 weekPeriod WeekNumber {..} = BeginEnd weekStart weekEnd
   where
-    weekStart :: LocalTime
-    weekStart = LocalTime (fromWeekDate weekNumberYear weekNumberWeek 1) midnight
-    weekEnd :: LocalTime
+    weekStart :: LocalSecond
+    weekStart =
+      LocalSecond
+        (fromWeekDate weekNumberYear weekNumberWeek 1)
+        (SecondOfDay 0)
+    weekEnd :: LocalSecond
     weekEnd =
-      LocalTime (fromWeekDate weekNumberYear (weekNumberWeek + 1) 1) midnight -- FIXME this can wrong at the end of the year
+      LocalSecond
+        (fromWeekDate weekNumberYear (weekNumberWeek + 1) 1)
+        (SecondOfDay 0) -- FIXME this can wrong at the end of the year
 
 dayPeriod :: Day -> Period
 dayPeriod d = BeginEnd dayStart dayEnd
   where
-    dayStart = LocalTime {localDay = d, localTimeOfDay = midnight}
-    dayEnd = LocalTime {localDay = addDays 1 d, localTimeOfDay = midnight}
+    dayStart = LocalSecond {localSecondDay = d, localSecondOfDay = SecondOfDay 0}
+    dayEnd = LocalSecond {localSecondDay = addDays 1 d, localSecondOfDay = SecondOfDay 0}
 
-filterPeriodLocal :: ZonedTime -> Period -> LocalTime -> Bool
+filterPeriodLocal :: ZonedTime -> Period -> LocalSecond -> Bool
 filterPeriodLocal now p l =
   ( case p of
       AllTime -> const True
@@ -85,87 +102,101 @@ filterPeriodLocal now p l =
   )
     l
   where
-    nowLocal :: LocalTime
-    nowLocal = zonedTimeToLocalTime now
     today :: Day
-    today = localDay nowLocal
-    filterBetween :: LocalTime -> LocalTime -> LocalTime -> Bool
+    today = localDay $ zonedTimeToLocalTime now
+    filterBetween :: LocalSecond -> LocalSecond -> LocalSecond -> Bool
     filterBetween start end lt = start <= lt && lt < end
-    yesterdayStart :: LocalTime
-    yesterdayStart = LocalTime {localDay = addDays (-1) today, localTimeOfDay = midnight}
-    yesterdayEnd :: LocalTime
+    yesterdayStart :: LocalSecond
+    yesterdayStart =
+      LocalSecond
+        { localSecondDay = addDays (-1) today,
+          localSecondOfDay = SecondOfDay 0
+        }
+    yesterdayEnd :: LocalSecond
     yesterdayEnd = todayStart
-    todayStart :: LocalTime
-    todayStart = LocalTime {localDay = today, localTimeOfDay = midnight}
-    todayEnd :: LocalTime
-    todayEnd = nowLocal {localDay = addDays 1 today, localTimeOfDay = midnight}
-    tomorrowStart :: LocalTime
+    todayStart :: LocalSecond
+    todayStart =
+      LocalSecond
+        { localSecondDay = today,
+          localSecondOfDay = SecondOfDay 0
+        }
+    todayEnd :: LocalSecond
+    todayEnd =
+      LocalSecond
+        { localSecondDay = addDays 1 today,
+          localSecondOfDay = SecondOfDay 0
+        }
+    tomorrowStart :: LocalSecond
     tomorrowStart = todayEnd
-    tomorrowEnd :: LocalTime
-    tomorrowEnd = LocalTime {localDay = addDays 2 today, localTimeOfDay = midnight}
-    lastWeekStart :: LocalTime
+    tomorrowEnd :: LocalSecond
+    tomorrowEnd =
+      LocalSecond
+        { localSecondDay = addDays 2 today,
+          localSecondOfDay = SecondOfDay 0
+        }
+    lastWeekStart :: LocalSecond
     lastWeekStart =
       let (y, wn, _) = toWeekDate today
-       in LocalTime (fromWeekDate y (wn - 1) 1) midnight -- TODO this will fail around newyear
-    lastWeekEnd :: LocalTime
+       in LocalSecond (fromWeekDate y (wn - 1) 1) (SecondOfDay 0) -- TODO this will fail around newyear
+    lastWeekEnd :: LocalSecond
     lastWeekEnd = thisWeekStart
-    thisWeekStart :: LocalTime
+    thisWeekStart :: LocalSecond
     thisWeekStart =
       let (y, wn, _) = toWeekDate today
-       in LocalTime (fromWeekDate y wn 1) midnight
-    thisWeekEnd :: LocalTime
+       in LocalSecond (fromWeekDate y wn 1) (SecondOfDay 0)
+    thisWeekEnd :: LocalSecond
     thisWeekEnd =
       let (y, wn, _) = toWeekDate today
-       in LocalTime (fromWeekDate y (wn + 1) 1) midnight -- FIXME this can wrong at the end of the year
-    nextWeekStart :: LocalTime
+       in LocalSecond (fromWeekDate y (wn + 1) 1) (SecondOfDay 0) -- FIXME this can wrong at the end of the year
+    nextWeekStart :: LocalSecond
     nextWeekStart = thisWeekEnd
-    nextWeekEnd :: LocalTime
+    nextWeekEnd :: LocalSecond
     nextWeekEnd =
       let (y, wn, _) = toWeekDate today
-       in LocalTime (fromWeekDate y (wn + 2) 1) midnight -- FIXME this can wrong at the end of the year
-    lastMonthStart :: LocalTime
+       in LocalSecond (fromWeekDate y (wn + 2) 1) (SecondOfDay 0) -- FIXME this can wrong at the end of the year
+    lastMonthStart :: LocalSecond
     lastMonthStart =
       let (y, m, _) = toGregorian today
-       in LocalTime (fromGregorian y (m - 1) 1) midnight -- FIXME This will fail around newyear
-    lastMonthEnd :: LocalTime
+       in LocalSecond (fromGregorian y (m - 1) 1) (SecondOfDay 0) -- FIXME This will fail around newyear
+    lastMonthEnd :: LocalSecond
     lastMonthEnd = thisMonthStart
-    thisMonthStart :: LocalTime
+    thisMonthStart :: LocalSecond
     thisMonthStart =
       let (y, m, _) = toGregorian today
-       in LocalTime (fromGregorian y m 1) midnight
-    thisMonthEnd :: LocalTime
+       in LocalSecond (fromGregorian y m 1) (SecondOfDay 0)
+    thisMonthEnd :: LocalSecond
     thisMonthEnd =
       let (y, m, _) = toGregorian today
-       in LocalTime (fromGregorian y m 31) midnight
-    nextMonthStart :: LocalTime
+       in LocalSecond (fromGregorian y m 31) (SecondOfDay 0)
+    nextMonthStart :: LocalSecond
     nextMonthStart = thisMonthEnd
-    nextMonthEnd :: LocalTime
+    nextMonthEnd :: LocalSecond
     nextMonthEnd =
       let (y, m, _) = toGregorian today
-       in LocalTime (fromGregorian y (m + 1) 31) midnight -- FIXME This will fail around newyear
-    lastYearStart :: LocalTime
+       in LocalSecond (fromGregorian y (m + 1) 31) (SecondOfDay 0) -- FIXME This will fail around newyear
+    lastYearStart :: LocalSecond
     lastYearStart =
       let (y, _, _) = toGregorian today
-       in LocalTime (fromGregorian (y - 1) 1 1) midnight -- FIXME This will fail around newyear
-    lastYearEnd :: LocalTime
+       in LocalSecond (fromGregorian (y - 1) 1 1) (SecondOfDay 0) -- FIXME This will fail around newyear
+    lastYearEnd :: LocalSecond
     lastYearEnd = thisYearEnd
-    thisYearStart :: LocalTime
+    thisYearStart :: LocalSecond
     thisYearStart =
       let (y, _, _) = toGregorian today
-       in LocalTime (fromGregorian y 1 1) midnight
-    thisYearEnd :: LocalTime
+       in LocalSecond (fromGregorian y 1 1) (SecondOfDay 0)
+    thisYearEnd :: LocalSecond
     thisYearEnd =
       let (y, _, _) = toGregorian today
-       in LocalTime (fromGregorian y 12 31) midnight
-    nextYearStart :: LocalTime
+       in LocalSecond (fromGregorian y 12 31) (SecondOfDay 0)
+    nextYearStart :: LocalSecond
     nextYearStart = thisYearEnd
-    nextYearEnd :: LocalTime
+    nextYearEnd :: LocalSecond
     nextYearEnd =
       let (y, _, _) = toGregorian today
-       in LocalTime (fromGregorian (y + 1) 12 31) midnight -- FIXME this will fail around newyear
+       in LocalSecond (fromGregorian (y + 1) 12 31) (SecondOfDay 0) -- FIXME this will fail around newyear
 
-filterPeriod :: ZonedTime -> Period -> UTCTime -> Bool
+filterPeriod :: ZonedTime -> Period -> UTCSecond -> Bool
 filterPeriod now p u =
   let tz :: TimeZone
       tz = zonedTimeZone now
-   in filterPeriodLocal now p $ utcToLocalTime tz u
+   in filterPeriodLocal now p $ localTimeToLocalSecond $ utcToLocalTime tz $ utcSecondToUTCTime u

@@ -78,13 +78,14 @@ spec = do
             []
         ]
     )
+  let t = utcTimeToUTCSecond $ UTCTime (fromGregorian 2022 01 22) 1234.56
   goldenFormatsSpec
     "Logbook entry"
     "logbook-entry"
     ( makeSmosFile
         [ Node
             ( (newEntry "clocked in")
-                { entryLogbook = LogOpen (UTCTime (fromGregorian 2022 01 22) 1234.56) []
+                { entryLogbook = LogOpen t []
                 }
             )
             [],
@@ -93,8 +94,8 @@ spec = do
                 { entryLogbook =
                     LogClosed
                       [ LogbookEntry
-                          { logbookEntryStart = UTCTime (fromGregorian 2022 01 22) 1234.56,
-                            logbookEntryEnd = UTCTime (fromGregorian 2022 01 22) 1234.56
+                          { logbookEntryStart = t,
+                            logbookEntryEnd = t
                           }
                       ]
                 }

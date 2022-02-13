@@ -33,6 +33,7 @@ module Smos.Data
     entryClockOut,
     logbookClockIn,
     logbookClockOut,
+    logbookEntryDiffTime,
     todoStateIsDone,
     mTodoStateIsDone,
     entryIsDone,
@@ -250,6 +251,12 @@ logbookClockOut now lb =
   case lb of
     LogClosed {} -> Nothing
     LogOpen start es -> constructValid $ LogClosed $ LogbookEntry start (utcTimeToUTCSecond now) : es
+
+logbookEntryDiffTime :: LogbookEntry -> NominalDiffTime
+logbookEntryDiffTime LogbookEntry {..} =
+  diffUTCTime
+    (utcSecondToUTCTime logbookEntryEnd)
+    (utcSecondToUTCTime logbookEntryStart)
 
 stateHistoryState :: StateHistory -> Maybe TodoState
 stateHistoryState (StateHistory tups) =

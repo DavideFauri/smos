@@ -29,7 +29,7 @@ data LogEntry = LogEntry
 instance Validity LogEntry
 
 data LogEvent = LogEvent
-  { logEventTimestamp :: UTCTime,
+  { logEventTimestamp :: UTCSecond,
     logEventType :: LogEventType
   }
   deriving (Show, Eq, Ord, Generic)
@@ -54,7 +54,7 @@ makeLogReport zt pe tb =
     . concatMap (uncurry $ makeLogEntries $ zonedTimeZone zt)
 
 logEntryDay :: TimeZone -> LogEntry -> Day
-logEntryDay tz = localDay . utcToLocalTime tz . logEventTimestamp . logEntryEvent
+logEntryDay tz = localSecondDay . utcSecondToLocalSecond tz . logEventTimestamp . logEntryEvent
 
 makeLogEntries :: TimeZone -> Path Rel File -> Entry -> [LogEntry]
 makeLogEntries tz rp e =

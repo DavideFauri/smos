@@ -151,16 +151,16 @@ convertLogbook (Org.Logbook cs) = do
         LogClosed es ->
           case mend of
             Nothing -> do
-              beginT <- constructUTCTime begin
+              beginT <- constructUTCSecond begin
               pure $ LogOpen beginT es
             Just end -> do
-              beginT <- constructUTCTime begin
-              endT <- constructUTCTime end
+              beginT <- constructUTCSecond begin
+              endT <- constructUTCSecond end
               let lbe = LogbookEntry {logbookEntryStart = beginT, logbookEntryEnd = endT}
               pure $ LogClosed $ lbe : es
       where
-        constructUTCTime :: DateTime -> Convert UTCTime
-        constructUTCTime DateTime {..} = do
+        constructUTCSecond :: DateTime -> Convert UTCSecond
+        constructUTCSecond DateTime {..} = do
           day <- constructDay yearMonthDay
           dt <- maybe (pure 0) constructDiffTime hourMinute
           lleft InvalidUTCTime $ prettyValidate $ UTCTime {utctDay = day, utctDayTime = dt}
