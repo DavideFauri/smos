@@ -110,82 +110,80 @@ trimLogbookEntry now cp =
   where
     tz :: TimeZone
     tz = zonedTimeZone now
-    nowLocal :: LocalTime
-    nowLocal = zonedTimeToLocalTime now
     today :: Day
-    today = localDay nowLocal
-    lastWeekStart :: LocalTime
+    today = localDay (zonedTimeToLocalTime now)
+    lastWeekStart :: LocalSecond
     lastWeekStart =
       let (y, wn, _) = toWeekDate today
-       in LocalTime (fromWeekDate y (wn - 1) 1) midnight -- TODO this will fail around newyear
-    lastWeekEnd :: LocalTime
+       in LocalSecond (fromWeekDate y (wn - 1) 1) (SecondOfDay 0) -- TODO this will fail around newyear
+    lastWeekEnd :: LocalSecond
     lastWeekEnd = thisWeekStart
-    thisWeekStart :: LocalTime
+    thisWeekStart :: LocalSecond
     thisWeekStart =
       let (y, wn, _) = toWeekDate today
-       in LocalTime (fromWeekDate y wn 1) midnight
-    thisWeekEnd :: LocalTime
+       in LocalSecond (fromWeekDate y wn 1) (SecondOfDay 0)
+    thisWeekEnd :: LocalSecond
     thisWeekEnd =
       let (y, wn, _) = toWeekDate today
-       in LocalTime (fromWeekDate y (wn + 1) 1) midnight -- FIXME this can wrong at the end of the year
-    nextWeekStart :: LocalTime
+       in LocalSecond (fromWeekDate y (wn + 1) 1) (SecondOfDay 0) -- FIXME this can wrong at the end of the year
+    nextWeekStart :: LocalSecond
     nextWeekStart = thisWeekEnd
-    nextWeekEnd :: LocalTime
+    nextWeekEnd :: LocalSecond
     nextWeekEnd =
       let (y, wn, _) = toWeekDate today
-       in LocalTime (fromWeekDate y (wn + 2) 1) midnight -- FIXME this can wrong at the end of the year
-    lastMonthStart :: LocalTime
+       in LocalSecond (fromWeekDate y (wn + 2) 1) (SecondOfDay 0) -- FIXME this can wrong at the end of the year
+    lastMonthStart :: LocalSecond
     lastMonthStart =
       let (y, m, _) = toGregorian today
-       in LocalTime (fromGregorian y (m - 1) 1) midnight -- FIXME This will fail around newyear
-    lastMonthEnd :: LocalTime
+       in LocalSecond (fromGregorian y (m - 1) 1) (SecondOfDay 0) -- FIXME This will fail around newyear
+    lastMonthEnd :: LocalSecond
     lastMonthEnd = thisMonthStart
-    thisMonthStart :: LocalTime
+    thisMonthStart :: LocalSecond
     thisMonthStart =
       let (y, m, _) = toGregorian today
-       in LocalTime (fromGregorian y m 1) midnight
-    thisMonthEnd :: LocalTime
+       in LocalSecond (fromGregorian y m 1) (SecondOfDay 0)
+    thisMonthEnd :: LocalSecond
     thisMonthEnd =
       let (y, m, _) = toGregorian today
-       in LocalTime (fromGregorian y m 31) midnight
-    nextMonthStart :: LocalTime
+       in LocalSecond (fromGregorian y m 31) (SecondOfDay 0)
+    nextMonthStart :: LocalSecond
     nextMonthStart = thisMonthEnd
-    nextMonthEnd :: LocalTime
+    nextMonthEnd :: LocalSecond
     nextMonthEnd =
       let (y, m, _) = toGregorian today
-       in LocalTime (fromGregorian y (m + 1) 31) midnight -- FIXME This will fail around newyear
-    lastYearStart :: LocalTime
+       in LocalSecond (fromGregorian y (m + 1) 31) (SecondOfDay 0) -- FIXME This will fail around newyear
+    lastYearStart :: LocalSecond
     lastYearStart =
       let (y, _, _) = toGregorian today
-       in LocalTime (fromGregorian (y - 1) 1 1) midnight -- FIXME This will fail around newyear
-    lastYearEnd :: LocalTime
+       in LocalSecond (fromGregorian (y - 1) 1 1) (SecondOfDay 0) -- FIXME This will fail around newyear
+    lastYearEnd :: LocalSecond
     lastYearEnd = thisYearEnd
-    thisYearStart :: LocalTime
+    thisYearStart :: LocalSecond
     thisYearStart =
       let (y, _, _) = toGregorian today
-       in LocalTime (fromGregorian y 1 1) midnight
-    thisYearEnd :: LocalTime
+       in LocalSecond (fromGregorian y 1 1) (SecondOfDay 0)
+    thisYearEnd :: LocalSecond
     thisYearEnd =
       let (y, _, _) = toGregorian today
-       in LocalTime (fromGregorian y 12 31) midnight
-    nextYearStart :: LocalTime
+       in LocalSecond (fromGregorian y 12 31) (SecondOfDay 0)
+    nextYearStart :: LocalSecond
     nextYearStart = thisYearEnd
-    nextYearEnd :: LocalTime
+    nextYearEnd :: LocalSecond
     nextYearEnd =
       let (y, _, _) = toGregorian today
-       in LocalTime (fromGregorian (y + 1) 12 31) midnight -- FIXME this will fail around newyear
+       in LocalSecond (fromGregorian (y + 1) 12 31) (SecondOfDay 0) -- FIXME this will fail around newyear
 
 trimLogbookEntryToDay :: TimeZone -> Day -> LogbookEntry -> Maybe LogbookEntry
 trimLogbookEntryToDay tz d = trimLogbookEntryTo tz dayStart dayEnd
   where
-    dayStart = LocalTime d midnight
-    dayEnd = LocalTime (addDays 1 d) midnight
+    dayStart = LocalSecond d (SecondOfDay 0)
+    dayEnd = LocalSecond (addDays 1 d) (SecondOfDay 0)
 
-trimLogbookEntryTo :: TimeZone -> LocalTime -> LocalTime -> LogbookEntry -> Maybe LogbookEntry
+trimLogbookEntryTo :: TimeZone -> LocalSecond -> LocalSecond -> LogbookEntry -> Maybe LogbookEntry
 trimLogbookEntryTo tz begin end = trimLogbookEntryToM tz (Just begin) (Just end)
 
 trimLogbookEntryToM ::
-  TimeZone -> Maybe LocalTime -> Maybe LocalTime -> LogbookEntry -> Maybe LogbookEntry
+  TimeZone -> Maybe LocalSecond -> Maybe LocalSecond -> LogbookEntry -> Maybe LogbookEntry
 trimLogbookEntryToM tz mBegin mEnd LogbookEntry {..} =
   constructValid $
     LogbookEntry
@@ -203,10 +201,10 @@ trimLogbookEntryToM tz mBegin mEnd LogbookEntry {..} =
               else fromLocal end
       }
   where
-    toLocal :: UTCTime -> LocalTime
-    toLocal = utcToLocalTime tz
-    fromLocal :: LocalTime -> UTCSecond
-    fromLocal = utcTimeToUTCSecond . localTimeToUTC tz
+    toLocal :: UTCTime -> LocalSecond
+    toLocal = localTimeToLocalSecond . utcToLocalTime tz
+    fromLocal :: LocalSecond -> UTCSecond
+    fromLocal = localSecondToUTCSecond tz
 
 divideIntoClockTimeBlocks :: ZonedTime -> TimeBlock -> [FileTimes] -> [ClockTimeBlock Text]
 divideIntoClockTimeBlocks zt cb cts =

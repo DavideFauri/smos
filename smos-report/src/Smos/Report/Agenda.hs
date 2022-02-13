@@ -72,7 +72,7 @@ instance ToJSON AgendaReport where
 
 makeAgendaReport :: ZonedTime -> Period -> TimeBlock -> [AgendaEntry] -> AgendaReport
 makeAgendaReport now period tb as =
-  let filteredAgenda = filter (filterPeriodLocal now period . timestampLocalTime . agendaEntryTimestamp) as
+  let filteredAgenda = filter (filterPeriodLocal now period . timestampLocalSecond . agendaEntryTimestamp) as
       (past, present, future) = divideIntoPastPresentFuture now filteredAgenda
       pastBlocks = divideIntoAgendaTableBlocks tb past
       futureBlocks = divideIntoAgendaTableBlocks tb future

@@ -5,7 +5,6 @@ module Smos.Report.Agenda.Gen where
 
 import Data.GenValidity
 import Data.GenValidity.Path ()
-import Data.Time
 import Smos.Data
 import Smos.Data.Gen ()
 import Smos.Report.Agenda
@@ -24,7 +23,7 @@ instance GenValid AgendaTodayReport where
     aes <- genValid
     let tsSetDay = \case
           TimestampDay _ -> TimestampDay d
-          TimestampLocalTime (LocalTime _ tod) -> TimestampLocalTime (LocalTime d tod)
+          TimestampLocalSecond (LocalSecond _ tod) -> TimestampLocalSecond (LocalSecond d tod)
     let aes' = map (\ae -> ae {agendaEntryTimestamp = tsSetDay (agendaEntryTimestamp ae)}) aes
     pure AgendaTodayReport {agendaTodayReportEntries = sortAgendaEntries aes'}
 

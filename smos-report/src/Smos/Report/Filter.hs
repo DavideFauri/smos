@@ -581,7 +581,7 @@ instance FilterArgument TimestampName where
 
 instance FilterArgument Timestamp where
   renderArgument = timestampText
-  parseArgument = maybe (Left "Invalid timestamp") Right . parseTimestampText
+  parseArgument = parseTimestampText
 
 instance FilterArgument Tag where
   renderArgument = tagText

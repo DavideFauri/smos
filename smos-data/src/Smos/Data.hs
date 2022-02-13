@@ -266,7 +266,7 @@ stateHistoryState (StateHistory tups) =
 
 stateHistorySetState :: UTCTime -> Maybe TodoState -> StateHistory -> Maybe StateHistory
 stateHistorySetState now mts sh =
-  constructValid $ sh {unStateHistory = StateHistoryEntry mts now : unStateHistory sh}
+  constructValid $ sh {unStateHistory = StateHistoryEntry mts (utcTimeToUTCSecond now) : unStateHistory sh}
 
 entryState :: Entry -> Maybe TodoState
 entryState = stateHistoryState . entryStateHistory

@@ -28,6 +28,7 @@ import qualified Env
 import Options.Applicative
 import Path
 import Path.IO
+import Smos.Data
 import Smos.Report.Agenda.Types
 import Smos.Report.Archive
 import Smos.Report.Config
@@ -331,14 +332,26 @@ parsePeriod =
               (maybeReader parseLocalEnd)
               (mconcat [long "end", metavar "LOCALTIME", help "end tiem (inclusive)"])
           )
-    parseLocalBegin :: String -> Maybe LocalTime
-    parseLocalBegin s = LocalTime <$> parseLocalDay s <*> pure midnight <|> parseExactly s
-    parseLocalEnd :: String -> Maybe LocalTime
+    parseLocalBegin :: String -> Maybe LocalSecond
+    parseLocalBegin s =
+      ( LocalSecond
+          <$> parseLocalDay s
+            <*> pure (SecondOfDay 0)
+      )
+        <|> parseExactly s
+    parseLocalEnd :: String -> Maybe LocalSecond
     parseLocalEnd s =
-      (LocalTime <$> (addDays 1 <$> parseLocalDay s) <*> pure midnight) <|> parseExactly s
-    parseExactly :: String -> Maybe LocalTime
+      ( LocalSecond
+          <$> (addDays 1 <$> parseLocalDay s)
+          <*> pure (SecondOfDay 0)
+      )
+        <|> parseExactly s
+    parseExactly :: String -> Maybe LocalSecond
     parseExactly s =
-      parseTimeM True defaultTimeLocale "%F %R" s <|> parseTimeM True defaultTimeLocale "%F %T" s
+      localTimeToLocalSecond
+        <$> ( parseTimeM True defaultTimeLocale "%F %R" s
+                <|> parseTimeM True defaultTimeLocale "%F %T" s
+            )
     parseLocalDay :: String -> Maybe Day
     parseLocalDay = parseTimeM True defaultTimeLocale "%F"
 

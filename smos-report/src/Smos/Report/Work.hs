@@ -47,7 +47,7 @@ data IntermediateWorkReport = IntermediateWorkReport
   { intermediateWorkReportResultEntries :: ![(Path Rel File, ForestCursor Entry)],
     intermediateWorkReportAgendaEntries :: ![(Path Rel File, ForestCursor Entry, TimestampName, Timestamp)],
     intermediateWorkReportNextBegin :: !(Maybe (Path Rel File, ForestCursor Entry, TimestampName, Timestamp)),
-    intermediateWorkReportOverdueWaiting :: ![(Path Rel File, ForestCursor Entry, UTCTime, Maybe Time)],
+    intermediateWorkReportOverdueWaiting :: ![(Path Rel File, ForestCursor Entry, UTCSecond, Maybe Time)],
     intermediateWorkReportOverdueStuck :: ![StuckReportEntry],
     intermediateWorkReportEntriesWithoutContext :: ![(Path Rel File, ForestCursor Entry)],
     intermediateWorkReportCheckViolations :: !(Map EntryFilter [(Path Rel File, ForestCursor Entry)])
@@ -119,7 +119,7 @@ makeIntermediateWorkReportForFile ctx@WorkReportContext {..} rp sf =
           Just psd -> () <$ stripProperPrefix psd rp
         se <- makeStuckReportEntry (zonedTimeZone workReportContextNow) rp sf
         latestChange <- stuckReportEntryLatestChange se
-        let diff = diffUTCTime (zonedTimeToUTC workReportContextNow) latestChange
+        let diff = diffUTCTime (zonedTimeToUTC workReportContextNow) (utcSecondToUTCTime latestChange)
         guard (diff >= timeNominalDiffTime workReportContextStuckThreshold)
         pure se
    in iwr
@@ -185,10 +185,10 @@ makeIntermediateWorkReport WorkReportContext {..} rp fc =
          in sortAgendaQuadruples $ filter go allAgendaQuadruples
       nextBeginEntry :: Maybe (Path Rel File, ForestCursor Entry, TimestampName, Timestamp)
       nextBeginEntry = headMay beginEntries
-      mWaitingEntry :: Maybe (Path Rel File, ForestCursor Entry, UTCTime, Maybe Time)
+      mWaitingEntry :: Maybe (Path Rel File, ForestCursor Entry, UTCSecond, Maybe Time)
       mWaitingEntry = do
         tup@(_, _, ts, mThreshold) <- makeWaitingQuadruple rp fc
-        let diff = diffUTCTime (zonedTimeToUTC workReportContextNow) ts
+        let diff = diffUTCTime (zonedTimeToUTC workReportContextNow) (utcSecondToUTCTime ts)
         let threshold = fromMaybe workReportContextWaitingThreshold mThreshold
         guard (diff >= timeNominalDiffTime threshold)
         pure tup

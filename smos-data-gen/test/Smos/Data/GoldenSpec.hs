@@ -60,6 +60,7 @@ spec = do
             ]
         ]
     )
+  let t = utcTimeToUTCSecond $ UTCTime (fromGregorian 2022 01 22) 1234.56
   goldenFormatsSpec
     "State history entry"
     "state-history-entry"
@@ -70,7 +71,7 @@ spec = do
                     StateHistory
                       [ StateHistoryEntry
                           { stateHistoryEntryNewState = Just "STARTED",
-                            stateHistoryEntryTimestamp = UTCTime (fromGregorian 2022 01 22) 1234
+                            stateHistoryEntryTimestamp = t
                           }
                       ]
                 }
@@ -78,7 +79,6 @@ spec = do
             []
         ]
     )
-  let t = utcTimeToUTCSecond $ UTCTime (fromGregorian 2022 01 22) 1234.56
   goldenFormatsSpec
     "Logbook entry"
     "logbook-entry"

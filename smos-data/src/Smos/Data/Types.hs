@@ -672,7 +672,7 @@ nullStateHistory = (== emptyStateHistory)
 
 data StateHistoryEntry = StateHistoryEntry
   { stateHistoryEntryNewState :: Maybe TodoState,
-    stateHistoryEntryTimestamp :: UTCTime
+    stateHistoryEntryTimestamp :: UTCSecond
   }
   deriving stock (Show, Eq, Generic)
   deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec StateHistoryEntry)
@@ -683,7 +683,10 @@ instance NFData StateHistoryEntry
 
 instance Ord StateHistoryEntry where
   compare =
-    mconcat [comparing $ Down . stateHistoryEntryTimestamp, comparing stateHistoryEntryNewState]
+    mconcat
+      [ comparing $ Down . stateHistoryEntryTimestamp,
+        comparing stateHistoryEntryNewState
+      ]
 
 instance HasCodec StateHistoryEntry where
   codec =
@@ -692,15 +695,20 @@ instance HasCodec StateHistoryEntry where
         ( object "StateHistoryEntry" $
             StateHistoryEntry
               <$> requiredField "state" "new state" .= stateHistoryEntryNewState
-              <*> parseAlternative
-                (requiredFieldWith "time" impreciseUtctimeCodec "time at which the state change happened")
-                (requiredFieldWith "time" utctimeCodec "time at which the state change happened (legacy format)")
-                .= stateHistoryEntryTimestamp
+              <*> requiredField "time" "time at which the state change happened" .= stateHistoryEntryTimestamp
         )
         ( object "StateHistoryEntry (legacy)" $
             StateHistoryEntry
               <$> requiredField "new-state" "new state" .= stateHistoryEntryNewState
-              <*> requiredFieldWith "timestamp" utctimeCodec "time at which the state change happened" .= stateHistoryEntryTimestamp
+              <*> requiredFieldWith
+                "timestamp"
+                ( dimapCodec
+                    utcTimeToUTCSecond
+                    utcSecondToUTCTime
+                    utctimeCodec
+                )
+                "time at which the state change happened"
+                .= stateHistoryEntryTimestamp
         )
 
 newtype Tag = Tag

@@ -33,7 +33,7 @@ data StuckReportEntry = StuckReportEntry
   { stuckReportEntryFilePath :: Path Rel File,
     stuckReportEntryState :: Maybe TodoState,
     stuckReportEntryHeader :: Header,
-    stuckReportEntryLatestChange :: Maybe UTCTime
+    stuckReportEntryLatestChange :: Maybe UTCSecond
   }
   deriving (Show, Eq, Generic)
 
@@ -64,7 +64,7 @@ latestEntryInSmosFile tz =
     . concatMap flatten
     . smosFileForest
 
-latestTimestampInEntry :: TimeZone -> Entry -> Maybe UTCTime
+latestTimestampInEntry :: TimeZone -> Entry -> Maybe UTCSecond
 latestTimestampInEntry tz e@Entry {..} =
   maximumMay $
     catMaybes $
@@ -76,18 +76,24 @@ latestTimestampInEntry tz e@Entry {..} =
           ]
         ]
 
-latestStateChange :: StateHistory -> Maybe UTCTime
+latestStateChange :: StateHistory -> Maybe UTCSecond
 latestStateChange (StateHistory shes) =
   case shes of
     [] -> Nothing
     (she : _) -> Just $ stateHistoryEntryTimestamp she
 
-latestClockChange :: Logbook -> Maybe UTCTime
+latestClockChange :: Logbook -> Maybe UTCSecond
 latestClockChange = \case
   LogOpen t _ -> Just t
   LogClosed les -> case les of
     [] -> Nothing
     (le : _) -> Just $ logbookEntryEnd le
 
-latestTimestamp :: TimeZone -> Map TimestampName Timestamp -> Maybe UTCTime
-latestTimestamp tz = fmap snd . M.lookupMax . M.map (localTimeToUTC tz . timestampLocalTime)
+latestTimestamp :: TimeZone -> Map TimestampName Timestamp -> Maybe UTCSecond
+latestTimestamp tz =
+  fmap snd
+    . M.lookupMax
+    . M.map
+      ( localSecondToUTCSecond tz
+          . timestampLocalSecond
+      )

@@ -13,7 +13,6 @@ import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Conduit.Combinators as C
 import Data.List
 import qualified Data.Map as M
-import Data.Time
 import Data.Validity
 import Data.Validity.Time ()
 import GHC.Generics
@@ -66,7 +65,7 @@ finishWaitingReport = WaitingReport . sortWaitingEntries
 
 data WaitingEntry = WaitingEntry
   { waitingEntryHeader :: Header,
-    waitingEntryTimestamp :: UTCTime,
+    waitingEntryTimestamp :: UTCSecond,
     waitingEntryThreshold :: Maybe Time,
     waitingEntryFilePath :: Path Rel File
   }
@@ -80,7 +79,7 @@ instance HasCodec WaitingEntry where
     object "WaitingEntry" $
       WaitingEntry
         <$> requiredField "header" "The entry header" .= waitingEntryHeader
-        <*> requiredFieldWith "timestamp" utctimeCodec "The timestamp at which this entry became WAITING" .= waitingEntryTimestamp
+        <*> requiredField "timestamp" "The timestamp at which this entry became WAITING" .= waitingEntryTimestamp
         <*> optionalFieldOrNull "threshold" "The threshold for 'have been waiting for too long'" .= waitingEntryThreshold
         <*> requiredField "path" "The path of the file that contained this waiting entry" .= waitingEntryFilePath
 
@@ -90,7 +89,7 @@ sortWaitingEntries = sortOn waitingEntryTimestamp
 makeWaitingEntry :: Path Rel File -> ForestCursor Entry -> Maybe WaitingEntry
 makeWaitingEntry rf fc = waitingQuadrupleToWaitingEntry <$> makeWaitingQuadruple rf fc
 
-waitingQuadrupleToWaitingEntry :: (Path Rel File, ForestCursor Entry, UTCTime, Maybe Time) -> WaitingEntry
+waitingQuadrupleToWaitingEntry :: (Path Rel File, ForestCursor Entry, UTCSecond, Maybe Time) -> WaitingEntry
 waitingQuadrupleToWaitingEntry (rf, fc, ts, mThreshold) =
   let e = forestCursorCurrent fc
    in WaitingEntry
@@ -100,20 +99,20 @@ waitingQuadrupleToWaitingEntry (rf, fc, ts, mThreshold) =
           waitingEntryFilePath = rf
         }
 
-makeWaitingQuadruple :: Path Rel File -> ForestCursor Entry -> Maybe (Path Rel File, ForestCursor Entry, UTCTime, Maybe Time)
+makeWaitingQuadruple :: Path Rel File -> ForestCursor Entry -> Maybe (Path Rel File, ForestCursor Entry, UTCSecond, Maybe Time)
 makeWaitingQuadruple rf fc = do
   let e = forestCursorCurrent fc
   ts <- parseWaitingStateTimestamp e
   let mThreshold = M.lookup "waiting_threshold" (entryProperties e) >>= (either (const Nothing) Just . Report.parseTime . propertyValueText)
   pure (rf, fc, ts, mThreshold)
 
-parseWaitingStateTimestamp :: Entry -> Maybe UTCTime
+parseWaitingStateTimestamp :: Entry -> Maybe UTCSecond
 parseWaitingStateTimestamp =
   firstWaiting
     . unStateHistory
     . entryStateHistory
   where
-    firstWaiting :: [StateHistoryEntry] -> Maybe UTCTime
+    firstWaiting :: [StateHistoryEntry] -> Maybe UTCSecond
     firstWaiting = \case
       [] -> Nothing
       (StateHistoryEntry {..} : _) ->
