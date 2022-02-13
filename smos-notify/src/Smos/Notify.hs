@@ -143,7 +143,7 @@ parseNotificationEvent now rf e = do
   let nowUTC = zonedTimeToUTC now
   lt <- case ts of
     TimestampDay _ -> [] -- Don't notify about day-based timestamps
-    TimestampLocalTime lt -> [lt]
+    TimestampLocalSecond ls -> [localSecondToLocalTime ls]
   let tsUTC = localTimeToUTC (zonedTimeZone now) lt
   let d = diffUTCTime tsUTC nowUTC
   let minutesAhead = 5

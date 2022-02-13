@@ -79,12 +79,12 @@ resolveEndDuration mstart = \case
   CalDuration ndt -> pure $ do
     start <- mstart
     let lt = timestampLocalTime start
-    pure $ TimestampLocalTime $ addLocalTime (fromIntegral ndt) lt
+    pure $ TimestampLocalSecond $ localTimeToLocalSecond $ addLocalTime (fromIntegral ndt) lt
 
 resolveTimestamp :: CalTimestamp -> R Timestamp
 resolveTimestamp = \case
   CalDate d -> pure $ TimestampDay d
-  CalDateTime dt -> TimestampLocalTime <$> resolveDateTime dt
+  CalDateTime dt -> TimestampLocalSecond . localTimeToLocalSecond <$> resolveDateTime dt
 
 resolveDateTime :: CalDateTime -> R LocalTime
 resolveDateTime = \case

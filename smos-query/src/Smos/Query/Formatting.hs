@@ -40,7 +40,8 @@ formatAsBicolourTable cc =
     . table
 
 showDaysSinceWithThreshold :: Time -> UTCTime -> UTCTime -> Chunk
-showDaysSinceWithThreshold threshold = showDaysSince (floor $ timeNominalDiffTime threshold / nominalDay)
+showDaysSinceWithThreshold threshold =
+  showDaysSince (floor $ timeNominalDiffTime threshold / nominalDay)
 
 showDaysSince :: Word -> UTCTime -> UTCTime -> Chunk
 showDaysSince threshold now t = fore color $ chunk $ T.pack $ show i <> " days"
@@ -67,7 +68,7 @@ formatAgendaEntry now AgendaEntry {..} =
             | d < 0 && agendaEntryTimestampName == "SCHEDULED" -> fore red
             | d == 0 && agendaEntryTimestampName == "SCHEDULED" -> fore green
             | otherwise -> id
-   in [ func $ chunk $ timestampPrettyText agendaEntryTimestamp,
+   in [ func $ chunk $ timestampText agendaEntryTimestamp,
         func $
           bold $
             chunk $
@@ -87,7 +88,10 @@ formatWaitingEntry :: Time -> UTCTime -> WaitingEntry -> [Chunk]
 formatWaitingEntry threshold now WaitingEntry {..} =
   [ pathChunk waitingEntryFilePath,
     headerChunk waitingEntryHeader,
-    showDaysSinceWithThreshold (fromMaybe threshold waitingEntryThreshold) now waitingEntryTimestamp,
+    showDaysSinceWithThreshold
+      (fromMaybe threshold waitingEntryThreshold)
+      now
+      waitingEntryTimestamp,
     maybe (chunk "") timeChunk waitingEntryThreshold
   ]
 
