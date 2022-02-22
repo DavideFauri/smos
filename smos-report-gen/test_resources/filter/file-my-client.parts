@@ -1,0 +1,9 @@
+Parts
+  { unParts =
+      [ PartPiece Piece { pieceText = "fst" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "file" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "my-client.smos" }
+      ]
+  }

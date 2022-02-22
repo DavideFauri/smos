@@ -1,0 +1,4 @@
+AstUnOp
+  Piece { pieceText = "snd" }
+  (AstUnOp
+     Piece { pieceText = "level" } (AstPiece Piece { pieceText = "5" }))

@@ -1,0 +1,17 @@
+AstUnOp
+  Piece { pieceText = "snd" }
+  (AstUnOp
+     Piece { pieceText = "cursor" }
+     (AstUnOp
+        Piece { pieceText = "properties" }
+        (AstUnOp
+           Piece { pieceText = "val" }
+           (AstUnOp
+              Piece { pieceText = "property" }
+              (AstUnOp
+                 Piece { pieceText = "maybe" }
+                 (AstUnOp
+                    Piece { pieceText = "False" }
+                    (AstUnOp
+                       Piece { pieceText = "sub" }
+                       (AstPiece Piece { pieceText = "high'" }))))))))

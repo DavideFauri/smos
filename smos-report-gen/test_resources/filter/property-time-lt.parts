@@ -1,0 +1,29 @@
+Parts
+  { unParts =
+      [ PartPiece Piece { pieceText = "snd" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "cursor" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "properties" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "val" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "property" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "maybe" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "False" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "time" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "maybe" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "False" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "ord" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "lt" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "2h" }
+      ]
+  }

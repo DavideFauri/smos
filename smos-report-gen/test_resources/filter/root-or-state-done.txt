@@ -1,0 +1,1 @@
+snd:(level:0 or cursor:state:maybe:False:sub:DONE)

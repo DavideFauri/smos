@@ -1,0 +1,9 @@
+Parts
+  { unParts =
+      [ PartPiece Piece { pieceText = "snd" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "level" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "5" }
+      ]
+  }

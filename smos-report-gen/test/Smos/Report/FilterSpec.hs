@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -10,6 +11,7 @@ module Smos.Report.FilterSpec
   )
 where
 
+import Control.Arrow (left)
 import Control.Monad
 import Cursor.Forest.Gen ()
 import Cursor.Simple.Forest
@@ -110,12 +112,11 @@ spec = do
         )
       parsesValidSpec astP
       it "parses back whatever 'renderAst' renders" $
-        forAllValid $
-          \ast ->
-            let t = renderAst ast
-             in case parseAst t of
-                  Left err -> expectationFailure $ show err
-                  Right ast' -> ast' `shouldBe` ast
+        forAllValid $ \ast ->
+          let t = renderAstParts ast
+           in context (show t) $ case parseAstParts t of
+                Left err -> expectationFailure $ show err
+                Right ast' -> ast' `shouldBe` ast
   describe "Type-checking" $ do
     filterArgumentSpec @Time
     filterArgumentSpec @Tag
@@ -411,31 +412,30 @@ spec = do
         producesValid (renderFilter @(Path Rel File, ForestCursor Entry))
     describe "parseEntryFilter" $
       it "parses back whatever 'renderFilter' renders" $
-        forAllValid $
-          \f ->
-            let t = renderFilter f
-             in case parseEntryFilter t of
-                  Left err ->
-                    expectationFailure $
-                      unlines
-                        [ "Original filter:",
-                          ppShow f,
-                          "rendered text:",
-                          show t,
-                          "parse failure:",
-                          show err
-                        ]
-                  Right f' ->
-                    let ctx =
-                          unlines
-                            [ "Original filter:",
-                              ppShow f,
-                              "rendered text:",
-                              show t,
-                              "parsed filter:",
-                              ppShow f'
-                            ]
-                     in context ctx $ f' `shouldBe` f
+        forAllValid $ \f -> do
+          let t = renderFilter f
+          case parseEntryFilter t of
+            Left err ->
+              expectationFailure $
+                unlines
+                  [ "Original filter:",
+                    ppShow f,
+                    "rendered text:",
+                    show t,
+                    "parse failure:",
+                    show err
+                  ]
+            Right f' ->
+              let ctx =
+                    unlines
+                      [ "Original filter:",
+                        ppShow f,
+                        "rendered text:",
+                        show t,
+                        "parsed filter:",
+                        ppShow f'
+                      ]
+               in context ctx $ f' `shouldBe` f
   describe "foldFilterAnd" $
     it "produces valid results" $
       producesValid (foldFilterAnd @Header)
@@ -491,20 +491,53 @@ spec = do
                   )
       )
   describe "examples" $
-    forM_ entryFilterExamples $ \(description, entryFilter) ->
+    forM_ entryFilterExamples $ \(description, filterFile, entryFilter) ->
       describe (T.unpack description) $ do
         it "is valid" $ shouldBeValid entryFilter
-        it "roundtrips" $
-          let rendered = renderFilter entryFilter
-           in context (show rendered) $ case parseEntryFilter rendered of
+
+        it "roundtrips through an ast" $
+          let rendered = renderFilterAst entryFilter
+              parsed = parseEntryFilterAst rendered
+           in context (show rendered) $ case parsed of
+                Left err -> expectationFailure $ T.unpack $ prettyFilterTypeError err
+                Right actual -> actual `shouldBe` entryFilter
+
+        it "renders to the same ast as before" $
+          pureGoldenStringFile
+            ("test_resources/filter/" <> filterFile <> ".ast")
+            (ppShow (renderFilterAst entryFilter) <> "\n")
+
+        it "roundtrips through parts" $
+          let rendered = renderAstParts $ renderFilterAst entryFilter
+              parsed = do
+                ast <- left ParsingError $ parseAstParts rendered
+                left TypeCheckingError $ parseEntryFilterAst ast
+           in context (show rendered) $ case parsed of
                 Left err -> expectationFailure $ T.unpack $ prettyFilterParseError err
                 Right actual -> actual `shouldBe` entryFilter
+
+        it "renders to the same parts as before" $
+          pureGoldenStringFile
+            ("test_resources/filter/" <> filterFile <> ".parts")
+            (ppShow (renderAstParts (renderFilterAst entryFilter)) <> "\n")
+
+        it "roundtrips through text" $
+          let rendered = renderFilter entryFilter
+              parsed = parseEntryFilter rendered
+           in context (show rendered) $ case parsed of
+                Left err -> expectationFailure $ T.unpack $ prettyFilterParseError err
+                Right actual -> actual `shouldBe` entryFilter
+
+        it "renders to the same text as before" $
+          pureGoldenTextFile
+            ("test_resources/filter/" <> filterFile <> ".txt")
+            (renderFilter entryFilter <> "\n")
 
 tcSpec :: (Show a, Eq a) => TC a -> Ast -> a -> Spec
 tcSpec tc ast a =
   it (unwords ["succesfully type-checks", show ast, "into", show a]) $
     case tc ast of
-      Left err -> expectationFailure $ T.unpack $ renderFilterTypeError err
+      Left err -> expectationFailure $ T.unpack $ prettyFilterTypeError err
       Right r -> r `shouldBe` a
 
 parsesValidSpec ::
@@ -538,5 +571,5 @@ filterArgumentSpec ::
   Spec
 filterArgumentSpec =
   specify "parseArgument and renderArgument are inverses" $
-    forAllValid $
-      \a -> parseArgument (renderArgument (a :: a)) `shouldBe` Right (a :: a)
+    forAllValid $ \a ->
+      parseArgument (renderArgument (a :: a)) `shouldBe` Right (a :: a)

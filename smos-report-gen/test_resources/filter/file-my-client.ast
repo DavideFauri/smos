@@ -1,0 +1,5 @@
+AstUnOp
+  Piece { pieceText = "fst" }
+  (AstUnOp
+     Piece { pieceText = "file" }
+     (AstPiece Piece { pieceText = "my-client.smos" }))

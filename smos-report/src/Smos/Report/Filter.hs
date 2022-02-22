@@ -328,8 +328,8 @@ instance Validity Ast
 
 instance NFData Ast
 
-renderAst :: Ast -> Parts
-renderAst = Parts . go
+renderAstParts :: Ast -> Parts
+renderAstParts = Parts . go
   where
     go =
       \case
@@ -344,8 +344,8 @@ renderAst = Parts . go
               [PartParen ClosedParen]
             ]
 
-parseAst :: Parts -> Either ParseError Ast
-parseAst = parse astP "ast" . unParts
+parseAstParts :: Parts -> Either ParseError Ast
+parseAstParts = parse astP "ast" . unParts
 
 astP :: PP Ast
 astP = choice [try astBinOpP, try astUnOpP, AstPiece <$> pieceP]
@@ -676,30 +676,38 @@ entryFilterFormsDocs =
     "(<filter> or <filter>)"
   ]
 
-entryFilterExamples :: [(Text, EntryFilter)]
+entryFilterExamples :: [(Text, FilePath, EntryFilter)]
 entryFilterExamples =
   [ ( "Select entries that have the 'online' tag:",
+      "tag-online",
       FilterSnd $ FilterWithinCursor $ FilterEntryTags $ FilterAny $ FilterSub $ Tag "online"
     ),
     ( "Select entries whose state is 'TODO':",
+      "state-todo",
       FilterSnd $ FilterWithinCursor $ FilterEntryTodoState $ FilterMaybe False $ FilterSub "TODO"
     ),
     ( "Select entries in a file whose filepath contains 'my-client.smos' as a substring:",
+      "file-my-client",
       FilterFst $ FilterFile [relfile|my-client.smos|]
     ),
     ( "Select entries on the fifth level in their file, down from the root:",
+      "level-5",
       FilterSnd $ FilterLevel 5
     ),
     ( "Select entries that contain the substring 'find' in their header:",
+      "header-find",
       FilterSnd $ FilterWithinCursor $ FilterEntryHeader $ FilterSub $ Header "find"
     ),
     ( "Select entries that have an 'effort' property:",
+      "property-effort-has",
       FilterSnd $ FilterWithinCursor $ FilterEntryProperties $ FilterMapHas "effort"
     ),
     ( "Select entries that have an 'effort' property that contains 'high' as a substring:",
+      "property-effort-high",
       FilterSnd $ FilterWithinCursor $ FilterEntryProperties $ FilterMapVal "property" $ FilterMaybe False $ FilterSub "high'"
     ),
     ( "Select entries that have a 'timewindow' property that, when interpreted as an amount of time, is less than two hours:",
+      "property-time-lt",
       FilterSnd $
         FilterWithinCursor $
           FilterEntryProperties $
@@ -711,21 +719,27 @@ entryFilterExamples =
                       Hours 2
     ),
     ( "Select entries whose parent have a 'work' tag:",
+      "tag-work",
       FilterSnd $ FilterParent $ FilterWithinCursor $ FilterEntryTags $ FilterAny $ FilterSub "work"
     ),
     ( "Select entries that have an ancestor whose state is 'DONE':",
+      "state-done",
       FilterSnd $ FilterAncestor $ FilterWithinCursor $ FilterEntryTodoState $ FilterMaybe False $ FilterSub "DONE"
     ),
     ( "Select entries that have a child that has a 'work' tag:",
+      "child-tag-work",
       FilterSnd $ FilterChild $ FilterWithinCursor $ FilterEntryTags $ FilterAny $ FilterSub "work"
     ),
     ( "Select entries that whose legacy contains a child whose state is 'DONE':",
+      "legacy-state-done",
       FilterSnd $ FilterLegacy $ FilterWithinCursor $ FilterEntryTodoState $ FilterMaybe False $ FilterSub "DONE"
     ),
     ( "Select entries that do _not_ have a 'work' tag:",
+      "not-tag-work",
       FilterSnd $ FilterWithinCursor $ FilterNot $ FilterEntryTags $ FilterAny $ FilterSub "work"
     ),
     ( "Select entries that have a 'work' tag _and_ also have the state 'NEXT':",
+      "tag-work-and-state-next",
       FilterSnd $
         FilterWithinCursor $
           FilterAnd
@@ -733,6 +747,7 @@ entryFilterExamples =
             (FilterEntryTodoState $ FilterMaybe False $ FilterSub "NEXT")
     ),
     ( "Select entries that are a root in their file _or_ have the state 'DONE':",
+      "root-or-state-done",
       FilterSnd $
         FilterOr
           (FilterLevel 0)
@@ -796,7 +811,7 @@ filterPredicate = go
             FilterOr f1 f2 -> goF f1 || goF f2
 
 renderFilter :: Filter a -> Text
-renderFilter = renderParts . renderAst . renderFilterAst
+renderFilter = renderParts . renderAstParts . renderFilterAst
 
 renderFilterAst :: Filter a -> Ast
 renderFilterAst = go
@@ -852,7 +867,7 @@ prettyFilterParseError =
   \case
     TokenisationError pe -> T.pack $ show pe
     ParsingError pe -> T.pack $ show pe
-    TypeCheckingError te -> renderFilterTypeError te
+    TypeCheckingError te -> prettyFilterTypeError te
 
 parseEntryFilter :: Text -> Either FilterParseError EntryFilter
 parseEntryFilter = parseTextFilter parseEntryFilterAst
@@ -863,7 +878,7 @@ parseProjectFilter = parseTextFilter parseProjectFilterAst
 parseTextFilter :: TC a -> Text -> Either FilterParseError a
 parseTextFilter tc t = do
   ps <- left TokenisationError $ parseParts t
-  ast <- left ParsingError $ parseAst ps
+  ast <- left ParsingError $ parseAstParts ps
   left TypeCheckingError $ tc ast
 
 data FilterTypeError
@@ -875,8 +890,8 @@ data FilterTypeError
   | FTENoChoices
   deriving (Show, Eq, Generic)
 
-renderFilterTypeError :: FilterTypeError -> Text
-renderFilterTypeError = T.pack . show
+prettyFilterTypeError :: FilterTypeError -> Text
+prettyFilterTypeError = T.pack . show
 
 type TCE a = Either FilterTypeError a
 

@@ -1,0 +1,29 @@
+Parts
+  { unParts =
+      [ PartPiece Piece { pieceText = "snd" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "cursor" }
+      , PartColumn
+      , PartParen OpenParen
+      , PartPiece Piece { pieceText = "tags" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "any" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "sub" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "work" }
+      , PartSpace
+      , PartBinOp AndOp
+      , PartSpace
+      , PartPiece Piece { pieceText = "state" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "maybe" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "False" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "sub" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "NEXT" }
+      , PartParen ClosedParen
+      ]
+  }

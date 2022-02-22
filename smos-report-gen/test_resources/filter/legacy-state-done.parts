@@ -1,0 +1,19 @@
+Parts
+  { unParts =
+      [ PartPiece Piece { pieceText = "snd" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "legacy" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "cursor" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "state" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "maybe" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "False" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "sub" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "DONE" }
+      ]
+  }

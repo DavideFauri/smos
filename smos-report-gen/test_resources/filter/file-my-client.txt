@@ -1,0 +1,1 @@
+fst:file:my-client.smos

@@ -1,0 +1,9 @@
+AstUnOp
+  Piece { pieceText = "snd" }
+  (AstUnOp
+     Piece { pieceText = "cursor" }
+     (AstUnOp
+        Piece { pieceText = "properties" }
+        (AstUnOp
+           Piece { pieceText = "has" }
+           (AstPiece Piece { pieceText = "effort" }))))

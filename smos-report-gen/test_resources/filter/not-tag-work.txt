@@ -1,0 +1,1 @@
+snd:cursor:not:tags:any:sub:work

@@ -1,0 +1,15 @@
+AstUnOp
+  Piece { pieceText = "snd" }
+  (AstUnOp
+     Piece { pieceText = "ancestor" }
+     (AstUnOp
+        Piece { pieceText = "cursor" }
+        (AstUnOp
+           Piece { pieceText = "state" }
+           (AstUnOp
+              Piece { pieceText = "maybe" }
+              (AstUnOp
+                 Piece { pieceText = "False" }
+                 (AstUnOp
+                    Piece { pieceText = "sub" }
+                    (AstPiece Piece { pieceText = "DONE" })))))))

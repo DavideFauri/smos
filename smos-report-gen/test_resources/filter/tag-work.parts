@@ -1,0 +1,17 @@
+Parts
+  { unParts =
+      [ PartPiece Piece { pieceText = "snd" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "parent" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "cursor" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "tags" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "any" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "sub" }
+      , PartColumn
+      , PartPiece Piece { pieceText = "work" }
+      ]
+  }

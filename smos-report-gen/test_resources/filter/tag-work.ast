@@ -1,0 +1,13 @@
+AstUnOp
+  Piece { pieceText = "snd" }
+  (AstUnOp
+     Piece { pieceText = "parent" }
+     (AstUnOp
+        Piece { pieceText = "cursor" }
+        (AstUnOp
+           Piece { pieceText = "tags" }
+           (AstUnOp
+              Piece { pieceText = "any" }
+              (AstUnOp
+                 Piece { pieceText = "sub" }
+                 (AstPiece Piece { pieceText = "work" }))))))

@@ -1,0 +1,9 @@
+AstUnOp
+  Piece { pieceText = "snd" }
+  (AstUnOp
+     Piece { pieceText = "cursor" }
+     (AstUnOp
+        Piece { pieceText = "header" }
+        (AstUnOp
+           Piece { pieceText = "sub" }
+           (AstPiece Piece { pieceText = "find" }))))

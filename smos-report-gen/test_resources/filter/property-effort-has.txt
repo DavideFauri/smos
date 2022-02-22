@@ -1,0 +1,1 @@
+snd:cursor:properties:has:effort

@@ -1,0 +1,22 @@
+AstUnOp
+  Piece { pieceText = "snd" }
+  (AstUnOp
+     Piece { pieceText = "cursor" }
+     (AstBinOp
+        (AstUnOp
+           Piece { pieceText = "tags" }
+           (AstUnOp
+              Piece { pieceText = "any" }
+              (AstUnOp
+                 Piece { pieceText = "sub" }
+                 (AstPiece Piece { pieceText = "work" }))))
+        AndOp
+        (AstUnOp
+           Piece { pieceText = "state" }
+           (AstUnOp
+              Piece { pieceText = "maybe" }
+              (AstUnOp
+                 Piece { pieceText = "False" }
+                 (AstUnOp
+                    Piece { pieceText = "sub" }
+                    (AstPiece Piece { pieceText = "NEXT" })))))))
