@@ -495,6 +495,14 @@ spec = do
       describe (T.unpack description) $ do
         it "is valid" $ shouldBeValid entryFilter
 
+        let fileWithExtension ext = "test_resources/filter/" <> filterFile <> "." <> ext
+
+        let astFile = fileWithExtension "ast"
+        it "renders to the same ast as before" $
+          pureGoldenStringFile
+            astFile
+            (ppShow (renderFilterAst entryFilter) <> "\n")
+
         it "roundtrips through an ast" $
           let rendered = renderFilterAst entryFilter
               parsed = parseEntryFilterAst rendered
@@ -502,10 +510,11 @@ spec = do
                 Left err -> expectationFailure $ T.unpack $ prettyFilterTypeError err
                 Right actual -> actual `shouldBe` entryFilter
 
-        it "renders to the same ast as before" $
+        let partsFile = fileWithExtension "parts"
+        it "renders to the same parts as before" $
           pureGoldenStringFile
-            ("test_resources/filter/" <> filterFile <> ".ast")
-            (ppShow (renderFilterAst entryFilter) <> "\n")
+            partsFile
+            (ppShow (renderAstParts (renderFilterAst entryFilter)) <> "\n")
 
         it "roundtrips through parts" $
           let rendered = renderAstParts $ renderFilterAst entryFilter
@@ -516,10 +525,11 @@ spec = do
                 Left err -> expectationFailure $ T.unpack $ prettyFilterParseError err
                 Right actual -> actual `shouldBe` entryFilter
 
-        it "renders to the same parts as before" $
-          pureGoldenStringFile
-            ("test_resources/filter/" <> filterFile <> ".parts")
-            (ppShow (renderAstParts (renderFilterAst entryFilter)) <> "\n")
+        let textFile = fileWithExtension "txt"
+        it "renders to the same text as before" $
+          pureGoldenTextFile
+            textFile
+            (renderFilter entryFilter <> "\n")
 
         it "roundtrips through text" $
           let rendered = renderFilter entryFilter
@@ -527,11 +537,6 @@ spec = do
            in context (show rendered) $ case parsed of
                 Left err -> expectationFailure $ T.unpack $ prettyFilterParseError err
                 Right actual -> actual `shouldBe` entryFilter
-
-        it "renders to the same text as before" $
-          pureGoldenTextFile
-            ("test_resources/filter/" <> filterFile <> ".txt")
-            (renderFilter entryFilter <> "\n")
 
 tcSpec :: (Show a, Eq a) => TC a -> Ast -> a -> Spec
 tcSpec tc ast a =
