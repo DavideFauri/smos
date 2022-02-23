@@ -275,7 +275,7 @@ spec = do
             (fromJust $ propertyName "client")
             (FilterMaybe False (FilterSub (fromJust $ propertyValue "cssyd")))
         )
-    describe "tcPropertiesFilter" $
+    describe "tcPropertiesFilter" $ do
       tcSpec
         tcPropertiesFilter
         ( AstUnOp
@@ -292,29 +292,98 @@ spec = do
             (fromJust $ propertyName "client")
             (FilterMaybe False (FilterSub (fromJust $ propertyValue "cssyd")))
         )
+      tcSpec
+        tcPropertiesFilter
+        ( AstUnOp
+            Piece {pieceText = "timewindow"}
+            ( AstUnOp
+                Piece {pieceText = "time"}
+                ( AstUnOp
+                    Piece {pieceText = "ord"}
+                    ( AstUnOp
+                        Piece {pieceText = "lt"}
+                        (AstPiece Piece {pieceText = "2h"})
+                    )
+                )
+            )
+        )
+        ( FilterMapVal "timewindow" $
+            FilterMaybe False $
+              FilterPropertyTime $
+                FilterMaybe False $
+                  FilterOrd LTC $
+                    Hours 2
+        )
+      tcSpec
+        tcPropertiesFilter
+        ( AstUnOp
+            Piece {pieceText = "snd"}
+            ( AstUnOp
+                Piece {pieceText = "cursor"}
+                ( AstUnOp
+                    Piece {pieceText = "properties"}
+                    ( AstUnOp
+                        Piece {pieceText = "val"}
+                        ( AstUnOp
+                            Piece {pieceText = "timewindow"}
+                            ( AstUnOp
+                                Piece {pieceText = "maybe"}
+                                ( AstUnOp
+                                    Piece {pieceText = "False"}
+                                    ( AstUnOp
+                                        Piece {pieceText = "time"}
+                                        ( AstUnOp
+                                            Piece {pieceText = "maybe"}
+                                            ( AstUnOp
+                                                Piece {pieceText = "False"}
+                                                ( AstUnOp
+                                                    Piece {pieceText = "ord"}
+                                                    ( AstUnOp
+                                                        Piece {pieceText = "lt"}
+                                                        (AstPiece Piece {pieceText = "2h"})
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+        ( FilterMapVal "timewindow" $
+            FilterMaybe False $
+              FilterPropertyTime $
+                FilterMaybe False $
+                  FilterOrd LTC $
+                    Hours 2
+        )
+
     describe "tcSetFilter" $ do
       tcSpec
         (tcSetFilter tcTagFilter)
         (AstUnOp (Piece "any") (AstUnOp (Piece "sub") (AstPiece (Piece "toast"))))
-        (FilterAny (FilterSub (fromJust $ tag "toast")))
+        (FilterAny (FilterSub "toast"))
       tcSpec
         (tcSetFilter tcTagFilter)
         (AstUnOp (Piece "all") (AstUnOp (Piece "sub") (AstPiece (Piece "a"))))
-        (FilterAll (FilterSub (fromJust $ tag "a")))
+        (FilterAll (FilterSub "a"))
     describe "tcTagsFilter" $ do
       tcSpec
         tcTagsFilter
         (AstUnOp (Piece "any") (AstUnOp (Piece "sub") (AstPiece (Piece "toast"))))
-        (FilterAny (FilterSub (fromJust $ tag "toast")))
+        (FilterAny (FilterSub "toast"))
       tcSpec
         tcTagsFilter
         (AstUnOp (Piece "all") (AstUnOp (Piece "sub") (AstPiece (Piece "a"))))
-        (FilterAll (FilterSub (fromJust $ tag "a")))
+        (FilterAll (FilterSub "a"))
     describe "tcEntryFilter" $ do
       tcSpec
         tcEntryFilter
         (AstUnOp (Piece "header") (AstUnOp (Piece "sub") (AstPiece (Piece "header"))))
-        (FilterEntryHeader (FilterSub (fromJust $ header "header")))
+        (FilterEntryHeader (FilterSub "header"))
       tcSpec
         tcEntryFilter
         ( AstUnOp
@@ -324,14 +393,14 @@ spec = do
                 (AstUnOp (Piece "false") (AstUnOp (Piece "sub") (AstPiece (Piece "TODO"))))
             )
         )
-        (FilterEntryTodoState (FilterMaybe False (FilterSub (fromJust $ todoState "TODO"))))
+        (FilterEntryTodoState (FilterMaybe False (FilterSub "TODO")))
       tcSpec
         tcEntryFilter
         ( AstUnOp
             (Piece "tags")
             (AstUnOp (Piece "all") (AstUnOp (Piece "sub") (AstPiece (Piece "a"))))
         )
-        (FilterEntryTags (FilterAll (FilterSub (fromJust $ tag "a"))))
+        (FilterEntryTags (FilterAll (FilterSub "a")))
       tcSpec
         tcEntryFilter
         ( AstUnOp
@@ -349,8 +418,8 @@ spec = do
         )
         ( FilterEntryProperties
             ( FilterMapVal
-                (fromJust $ propertyName "client")
-                (FilterMaybe False (FilterSub (fromJust $ propertyValue "cssyd")))
+                "client"
+                (FilterMaybe False (FilterSub "cssyd"))
             )
         )
     describe "tcForestCursorFilter" $ do
@@ -364,7 +433,7 @@ spec = do
             (Piece "parent")
             (AstUnOp (Piece "cursor") (AstUnOp (Piece "sub") (AstPiece (Piece "header"))))
         )
-        (FilterParent (FilterWithinCursor (FilterSub (fromJust $ header "header"))))
+        (FilterParent (FilterWithinCursor (FilterSub ("header" :: Header))))
     describe "tcTupleFilter" $ do
       tcSpec
         (tcTupleFilter tcFilePathFilter tcEntryFilter)
@@ -373,7 +442,7 @@ spec = do
       tcSpec
         (tcTupleFilter tcEntryFilter tcSub)
         (AstUnOp (Piece "snd") (AstUnOp (Piece "sub") (AstPiece (Piece "header"))))
-        (FilterSnd (FilterSub (fromJust $ header "header")))
+        (FilterSnd (FilterSub ("header" :: Header)))
     describe "renderFilterAst" $ do
       it "produces valid asts for header filters" $ producesValid (renderFilterAst @Header)
       it "produces valid asts for file filters" $
@@ -445,7 +514,9 @@ spec = do
   describe "parseEntryFilter" $ do
     let pe input expected =
           it (unwords ["succesfully parses", show input, "into", show expected]) $
-            parseEntryFilter input `shouldBe` Right expected
+            case parseEntryFilter input of
+              Left err -> expectationFailure $ T.unpack $ prettyFilterParseError err
+              Right actual -> actual `shouldBe` expected
         pee input expected = pe input (FilterSnd $ FilterWithinCursor expected)
 
     let fileFilter = FilterFst $ FilterFile [relfile|side|]
@@ -469,7 +540,7 @@ spec = do
     pee "snd:cursor:tags:any:toast" tagToastfilter
     pee "snd:cursor:tags:any:sub:toast" tagToastfilter
 
-    let stateDoneFilter = FilterEntryTodoState $ FilterMaybe False $ FilterSub $ fromJust $ todoState "DONE"
+    let stateDoneFilter = FilterEntryTodoState $ FilterMaybe False $ FilterSub "DONE"
     pee "state:DONE" stateDoneFilter
     pee "snd:state:DONE" stateDoneFilter
     pee "cursor:state:DONE" stateDoneFilter
@@ -506,22 +577,22 @@ spec = do
 
     let propertyTimeLt2h =
           FilterEntryProperties $
-            FilterMapVal (fromJust $ propertyName "time") $
+            FilterMapVal (fromJust $ propertyName "timewindow") $
               FilterMaybe False $
                 FilterPropertyTime $
                   FilterMaybe False $
                     FilterOrd LTC $
                       Hours 2
-    pee "property:time:lt:2h" propertyTimeLt2h
-    pee "property:time:ord:lt:2h" propertyTimeLt2h
-    pee "property:time:maybe:false:ord:lt:2h" propertyTimeLt2h
-    pee "property:time:maybe:False:ord:lt:2h" propertyTimeLt2h
-    pee "property:maybe:false:time:maybe:False:ord:lt:2h" propertyTimeLt2h
-    pee "property:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
-    pee "properties:val:property:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
-    pee "cursor:properties:val:property:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
-    pee "snd:properties:val:property:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
-    pee "snd:cursor:properties:val:property:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
+    pee "properties:timewindow:time:lt:2h" propertyTimeLt2h
+    pee "properties:timewindow:time:ord:lt:2h" propertyTimeLt2h
+    pee "properties:timewindow:time:maybe:false:ord:lt:2h" propertyTimeLt2h
+    pee "properties:timewindow:time:maybe:False:ord:lt:2h" propertyTimeLt2h
+    pee "properties:timewindow:maybe:false:time:maybe:False:ord:lt:2h" propertyTimeLt2h
+    pee "properties:timewindow:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
+    pee "properties:val:timewindow:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
+    pee "snd:properties:val:timewindow:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
+    pee "cursor:properties:val:timewindow:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
+    pee "snd:cursor:properties:val:timewindow:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
 
     pe
       "ancestor:tag:(home or (online or offline))"

@@ -8,7 +8,7 @@ Parts
       , PartColumn
       , PartPiece Piece { pieceText = "val" }
       , PartColumn
-      , PartPiece Piece { pieceText = "property" }
+      , PartPiece Piece { pieceText = "timewindow" }
       , PartColumn
       , PartPiece Piece { pieceText = "maybe" }
       , PartColumn

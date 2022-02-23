@@ -19,7 +19,7 @@
     Examples
 
   <ul>
-    $forall (explanation, entryFilter) <- entryFilterExamples
+    $forall (explanation, _, entryFilter) <- entryFilterExamples
       <li>
         <p>
           #{explanation}

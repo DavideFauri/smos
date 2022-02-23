@@ -42,6 +42,7 @@ import Text.Parsec.Pos
 import Text.Parsec.Prim
 import Text.ParserCombinators.Parsec.Char
 import Text.Read (readMaybe)
+import Text.Show.Pretty (ppShow)
 
 data Paren
   = OpenParen
@@ -711,7 +712,7 @@ entryFilterExamples =
       FilterSnd $
         FilterWithinCursor $
           FilterEntryProperties $
-            FilterMapVal "property" $
+            FilterMapVal "timewindow" $
               FilterMaybe False $
                 FilterPropertyTime $
                   FilterMaybe False $
@@ -891,7 +892,39 @@ data FilterTypeError
   deriving (Show, Eq, Generic)
 
 prettyFilterTypeError :: FilterTypeError -> Text
-prettyFilterTypeError = T.pack . show
+prettyFilterTypeError =
+  T.pack . \case
+    FTEPieceExpected ast ->
+      unlines
+        [ "Expected a piece, but got a different AST instead: ",
+          ppShow ast
+        ]
+    FTEUnOpExpected ast ->
+      unlines
+        [ "Expected a unary operation, but got a different AST instead: ",
+          ppShow ast
+        ]
+    FTEKeyWordExpected piece ->
+      unlines
+        [ "Expected a keyword, but this piece failed to parse as one:",
+          ppShow piece
+        ]
+    FTEThisKeyWordExpected expected actual ->
+      unlines $
+        concat
+          [ ["Expected one of these keywords:"],
+            map ppShow expected,
+            ["but got this one instead:", ppShow actual]
+          ]
+    FTEArgumentExpected piece err ->
+      unlines
+        [ unwords
+            [ "Expected an argument, but this piece failed to parse as one:",
+              ppShow piece
+            ],
+          err
+        ]
+    FTENoChoices -> "No choices leftover."
 
 type TCE a = Either FilterTypeError a
 

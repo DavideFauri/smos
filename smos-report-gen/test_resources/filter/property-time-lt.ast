@@ -7,7 +7,7 @@ AstUnOp
         (AstUnOp
            Piece { pieceText = "val" }
            (AstUnOp
-              Piece { pieceText = "property" }
+              Piece { pieceText = "timewindow" }
               (AstUnOp
                  Piece { pieceText = "maybe" }
                  (AstUnOp

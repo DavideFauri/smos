@@ -1,1 +1,1 @@
-snd:cursor:properties:val:property:maybe:False:time:maybe:False:ord:lt:2h
+snd:cursor:properties:val:timewindow:maybe:False:time:maybe:False:ord:lt:2h
