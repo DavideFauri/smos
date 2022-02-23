@@ -447,36 +447,82 @@ spec = do
           it (unwords ["succesfully parses", show input, "into", show expected]) $
             parseEntryFilter input `shouldBe` Right expected
         pee input expected = pe input (FilterSnd $ FilterWithinCursor expected)
-    pe "fst:file:side" (FilterFst $ FilterFile [relfile|side|])
-    pe "file:side" (FilterFst $ FilterFile [relfile|side|])
-    pee "header:head" (FilterEntryHeader $ FilterSub $ fromJust $ header "head")
-    pee "header:sub:head" (FilterEntryHeader $ FilterSub $ fromJust $ header "head")
-    pee "tag:toast" (FilterEntryTags $ FilterAny $ FilterSub $ fromJust $ tag "toast")
-    pee
-      "state:DONE"
-      (FilterEntryTodoState $ FilterMaybe False $ FilterSub $ fromJust $ todoState "DONE")
-    pee
-      "property:timewindow"
-      (FilterEntryProperties $ FilterMapHas $ fromJust $ propertyName "timewindow")
-    pee
-      "property:client:nasa"
-      ( FilterEntryProperties $
-          FilterMapVal (fromJust $ propertyName "client") $
-            FilterMaybe False $
-              FilterSub $
-                fromJust $
-                  propertyValue "nasa"
-      )
-    pee
-      "property:timewindow:time:lt:2h"
-      ( FilterEntryProperties $
-          FilterMapVal (fromJust $ propertyName "timewindow") $
-            FilterMaybe False $
-              FilterPropertyTime $
-                FilterMaybe False $
-                  FilterOrd LTC $
-                    Hours 2
-      )
+
+    let fileFilter = FilterFst $ FilterFile [relfile|side|]
+    pe "fst:file:side" fileFilter
+    pe "file:side" fileFilter
+
+    let headerFilter = FilterEntryHeader $ FilterSub "head"
+    pee "header:head" headerFilter
+    pee "snd:header:head" headerFilter
+    pee "header:sub:head" headerFilter
+    pee "snd:cursor:header:sub:head" headerFilter
+
+    let tagToastfilter = FilterEntryTags $ FilterAny $ FilterSub "toast"
+    pee "tag:toast" tagToastfilter
+    pee "cursor:tag:toast" tagToastfilter
+    pee "snd:tag:toast" tagToastfilter
+    pee "snd:cursor:tag:toast" tagToastfilter
+    pee "tags:toast" tagToastfilter
+    pee "snd:tags:toast" tagToastfilter
+    pee "snd:cursor:tags:toast" tagToastfilter
+    pee "snd:cursor:tags:any:toast" tagToastfilter
+    pee "snd:cursor:tags:any:sub:toast" tagToastfilter
+
+    let stateDoneFilter = FilterEntryTodoState $ FilterMaybe False $ FilterSub $ fromJust $ todoState "DONE"
+    pee "state:DONE" stateDoneFilter
+    pee "snd:state:DONE" stateDoneFilter
+    pee "cursor:state:DONE" stateDoneFilter
+    pee "snd:cursor:state:DONE" stateDoneFilter
+    -- pee "snd:cursor:state:maybe:DONE" stateDoneFilter
+    pee "snd:cursor:state:maybe:false:DONE" stateDoneFilter
+    pee "snd:cursor:state:maybe:false:sub:DONE" stateDoneFilter
+    pee "snd:cursor:state:maybe:False:sub:DONE" stateDoneFilter
+
+    let propertyHasTimewindow = FilterEntryProperties $ FilterMapHas "timewindow"
+    pee "property:timewindow" propertyHasTimewindow
+    pee "properties:timewindow" propertyHasTimewindow
+    pee "properties:has:timewindow" propertyHasTimewindow
+    pee "snd:properties:has:timewindow" propertyHasTimewindow
+    pee "cursor:properties:has:timewindow" propertyHasTimewindow
+    pee "snd:cursor:properties:has:timewindow" propertyHasTimewindow
+
+    let propertyClientNasa =
+          FilterEntryProperties $
+            FilterMapVal "client" $
+              FilterMaybe False $
+                FilterSub $
+                  fromJust $
+                    propertyValue "nasa"
+    pee "property:client:nasa" propertyClientNasa
+    pee "properties:client:nasa" propertyClientNasa
+    pee "property:client:maybe:false:nasa" propertyClientNasa
+    pee "properties:client:maybe:false:nasa" propertyClientNasa
+    pee "properties:client:maybe:false:sub:nasa" propertyClientNasa
+    pee "cursor:properties:client:maybe:false:sub:nasa" propertyClientNasa
+    pee "snd:properties:client:maybe:false:sub:nasa" propertyClientNasa
+    pee "snd:cursor:properties:client:maybe:false:sub:nasa" propertyClientNasa
+    pee "properties:client:maybe:False:sub:nasa" propertyClientNasa
+
+    let propertyTimeLt2h =
+          FilterEntryProperties $
+            FilterMapVal (fromJust $ propertyName "time") $
+              FilterMaybe False $
+                FilterPropertyTime $
+                  FilterMaybe False $
+                    FilterOrd LTC $
+                      Hours 2
+    pee "property:time:lt:2h" propertyTimeLt2h
+    pee "property:time:ord:lt:2h" propertyTimeLt2h
+    pee "property:time:maybe:false:ord:lt:2h" propertyTimeLt2h
+    pee "property:time:maybe:False:ord:lt:2h" propertyTimeLt2h
+    pee "property:maybe:false:time:maybe:False:ord:lt:2h" propertyTimeLt2h
+    pee "property:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
+    pee "properties:val:property:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
+    pee "cursor:properties:val:property:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
+    pee "snd:properties:val:property:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
+    pee "snd:cursor:properties:val:property:maybe:False:time:maybe:False:ord:lt:2h" propertyTimeLt2h
+
     pe
       "ancestor:tag:(home or (online or offline))"
       ( FilterSnd $
