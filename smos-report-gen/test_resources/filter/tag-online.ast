@@ -1,11 +1,6 @@
 AstUnOp
-  Piece { pieceText = "snd" }
+  "snd"
   (AstUnOp
-     Piece { pieceText = "cursor" }
+     "cursor"
      (AstUnOp
-        Piece { pieceText = "tags" }
-        (AstUnOp
-           Piece { pieceText = "any" }
-           (AstUnOp
-              Piece { pieceText = "sub" }
-              (AstPiece Piece { pieceText = "online" })))))
+        "tags" (AstUnOp "any" (AstUnOp "sub" (AstPiece "online")))))

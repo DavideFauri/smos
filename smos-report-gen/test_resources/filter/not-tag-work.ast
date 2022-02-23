@@ -1,13 +1,8 @@
 AstUnOp
-  Piece { pieceText = "snd" }
+  "snd"
   (AstUnOp
-     Piece { pieceText = "cursor" }
+     "cursor"
      (AstUnOp
-        Piece { pieceText = "not" }
+        "not"
         (AstUnOp
-           Piece { pieceText = "tags" }
-           (AstUnOp
-              Piece { pieceText = "any" }
-              (AstUnOp
-                 Piece { pieceText = "sub" }
-                 (AstPiece Piece { pieceText = "work" }))))))
+           "tags" (AstUnOp "any" (AstUnOp "sub" (AstPiece "work"))))))

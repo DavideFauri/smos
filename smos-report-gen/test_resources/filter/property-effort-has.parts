@@ -1,13 +1,13 @@
 Parts
   { unParts =
-      [ PartPiece Piece { pieceText = "snd" }
+      [ PartPiece "snd"
       , PartColumn
-      , PartPiece Piece { pieceText = "cursor" }
+      , PartPiece "cursor"
       , PartColumn
-      , PartPiece Piece { pieceText = "properties" }
+      , PartPiece "properties"
       , PartColumn
-      , PartPiece Piece { pieceText = "has" }
+      , PartPiece "has"
       , PartColumn
-      , PartPiece Piece { pieceText = "effort" }
+      , PartPiece "effort"
       ]
   }

@@ -1,9 +1,5 @@
 AstUnOp
-  Piece { pieceText = "snd" }
+  "snd"
   (AstUnOp
-     Piece { pieceText = "cursor" }
-     (AstUnOp
-        Piece { pieceText = "properties" }
-        (AstUnOp
-           Piece { pieceText = "has" }
-           (AstPiece Piece { pieceText = "effort" }))))
+     "cursor"
+     (AstUnOp "properties" (AstUnOp "has" (AstPiece "effort"))))

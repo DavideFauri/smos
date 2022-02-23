@@ -295,14 +295,14 @@ spec = do
       tcSpec
         tcPropertiesFilter
         ( AstUnOp
-            Piece {pieceText = "timewindow"}
+            "timewindow"
             ( AstUnOp
-                Piece {pieceText = "time"}
+                "time"
                 ( AstUnOp
-                    Piece {pieceText = "ord"}
+                    "ord"
                     ( AstUnOp
-                        Piece {pieceText = "lt"}
-                        (AstPiece Piece {pieceText = "2h"})
+                        "lt"
+                        (AstPiece "2h")
                     )
                 )
             )
@@ -317,30 +317,30 @@ spec = do
       tcSpec
         tcPropertiesFilter
         ( AstUnOp
-            Piece {pieceText = "snd"}
+            "snd"
             ( AstUnOp
-                Piece {pieceText = "cursor"}
+                "cursor"
                 ( AstUnOp
-                    Piece {pieceText = "properties"}
+                    "properties"
                     ( AstUnOp
-                        Piece {pieceText = "val"}
+                        "val"
                         ( AstUnOp
-                            Piece {pieceText = "timewindow"}
+                            "timewindow"
                             ( AstUnOp
-                                Piece {pieceText = "maybe"}
+                                "maybe"
                                 ( AstUnOp
-                                    Piece {pieceText = "False"}
+                                    "False"
                                     ( AstUnOp
-                                        Piece {pieceText = "time"}
+                                        "time"
                                         ( AstUnOp
-                                            Piece {pieceText = "maybe"}
+                                            "maybe"
                                             ( AstUnOp
-                                                Piece {pieceText = "False"}
+                                                "False"
                                                 ( AstUnOp
-                                                    Piece {pieceText = "ord"}
+                                                    "ord"
                                                     ( AstUnOp
-                                                        Piece {pieceText = "lt"}
-                                                        (AstPiece Piece {pieceText = "2h"})
+                                                        "lt"
+                                                        (AstPiece "2h")
                                                     )
                                                 )
                                             )

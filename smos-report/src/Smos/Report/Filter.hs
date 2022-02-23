@@ -1,6 +1,8 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -26,6 +28,7 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe
 import Data.Set (Set)
+import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Validity
@@ -77,7 +80,8 @@ renderBinOp =
 newtype Piece = Piece
   { pieceText :: Text
   }
-  deriving (Show, Eq, Generic)
+  deriving stock (Generic)
+  deriving newtype (Show, Read, IsString, Eq, Ord)
 
 instance Validity Piece where
   validate p@(Piece t) =

@@ -1,17 +1,11 @@
 AstUnOp
-  Piece { pieceText = "snd" }
+  "snd"
   (AstBinOp
-     (AstUnOp
-        Piece { pieceText = "level" } (AstPiece Piece { pieceText = "0" }))
+     (AstUnOp "level" (AstPiece "0"))
      OrOp
      (AstUnOp
-        Piece { pieceText = "cursor" }
+        "cursor"
         (AstUnOp
-           Piece { pieceText = "state" }
+           "state"
            (AstUnOp
-              Piece { pieceText = "maybe" }
-              (AstUnOp
-                 Piece { pieceText = "False" }
-                 (AstUnOp
-                    Piece { pieceText = "sub" }
-                    (AstPiece Piece { pieceText = "DONE" })))))))
+              "maybe" (AstUnOp "False" (AstUnOp "sub" (AstPiece "DONE")))))))

@@ -1,9 +1,4 @@
 AstUnOp
-  Piece { pieceText = "snd" }
+  "snd"
   (AstUnOp
-     Piece { pieceText = "cursor" }
-     (AstUnOp
-        Piece { pieceText = "header" }
-        (AstUnOp
-           Piece { pieceText = "sub" }
-           (AstPiece Piece { pieceText = "find" }))))
+     "cursor" (AstUnOp "header" (AstUnOp "sub" (AstPiece "find"))))
