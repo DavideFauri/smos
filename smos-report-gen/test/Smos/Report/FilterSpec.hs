@@ -317,33 +317,24 @@ spec = do
       tcSpec
         tcPropertiesFilter
         ( AstUnOp
-            "snd"
+            "val"
             ( AstUnOp
-                "cursor"
+                "timewindow"
                 ( AstUnOp
-                    "properties"
+                    "maybe"
                     ( AstUnOp
-                        "val"
+                        "False"
                         ( AstUnOp
-                            "timewindow"
+                            "time"
                             ( AstUnOp
                                 "maybe"
                                 ( AstUnOp
                                     "False"
                                     ( AstUnOp
-                                        "time"
+                                        "ord"
                                         ( AstUnOp
-                                            "maybe"
-                                            ( AstUnOp
-                                                "False"
-                                                ( AstUnOp
-                                                    "ord"
-                                                    ( AstUnOp
-                                                        "lt"
-                                                        (AstPiece "2h")
-                                                    )
-                                                )
-                                            )
+                                            "lt"
+                                            (AstPiece "2h")
                                         )
                                     )
                                 )
