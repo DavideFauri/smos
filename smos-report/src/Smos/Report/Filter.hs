@@ -33,6 +33,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Validity
 import Data.Validity.Path ()
+import GHC.Exts (IsList (..))
 import GHC.Generics (Generic)
 import Lens.Micro
 import Path
@@ -50,7 +51,7 @@ import Text.Show.Pretty (ppShow)
 data Paren
   = OpenParen
   | ClosedParen
-  deriving (Show, Eq, Generic)
+  deriving (Show, Eq, Read, Generic)
 
 instance Validity Paren
 
@@ -65,7 +66,7 @@ renderParen =
 data BinOp
   = AndOp
   | OrOp
-  deriving (Show, Eq, Generic)
+  deriving (Show, Read, Eq, Generic)
 
 instance Validity BinOp
 
@@ -117,7 +118,7 @@ data Part
   | PartColumn
   | PartPiece Piece
   | PartBinOp BinOp
-  deriving (Show, Eq, Generic)
+  deriving (Show, Read, Eq, Generic)
 
 instance Validity Part
 
@@ -135,7 +136,13 @@ renderPart =
 newtype Parts = Parts
   { unParts :: [Part]
   }
-  deriving (Show, Eq, Generic)
+  deriving stock (Generic)
+  deriving newtype (Show, Read, Eq)
+
+instance IsList Parts where
+  type Item Parts = Part
+  fromList = Parts
+  toList = unParts
 
 instance Validity Parts where
   validate p@(Parts ps) =

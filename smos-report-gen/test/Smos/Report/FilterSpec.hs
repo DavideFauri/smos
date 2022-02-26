@@ -1,6 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -58,50 +59,45 @@ spec = do
       parseSuccessSpec
         partsP
         "file:side"
-        (Parts [PartPiece (Piece "file"), PartColumn, PartPiece (Piece "side")])
+        [PartPiece (Piece "file"), PartColumn, PartPiece (Piece "side")]
       parseSuccessSpec
         partsP
         "(file:side and level:3)"
-        ( Parts
-            [ PartParen OpenParen,
-              PartPiece (Piece "file"),
-              PartColumn,
-              PartPiece (Piece "side"),
-              PartSpace,
-              PartBinOp AndOp,
-              PartSpace,
-              PartPiece (Piece "level"),
-              PartColumn,
-              PartPiece (Piece "3"),
-              PartParen ClosedParen
-            ]
-        )
+        [ PartParen OpenParen,
+          PartPiece (Piece "file"),
+          PartColumn,
+          PartPiece (Piece "side"),
+          PartSpace,
+          PartBinOp AndOp,
+          PartSpace,
+          PartPiece (Piece "level"),
+          PartColumn,
+          PartPiece (Piece "3"),
+          PartParen ClosedParen
+        ]
 
       parseSuccessSpec
         partsP
         "properties:timewindow:time:ord:lt:2h"
-        ( Parts
-            [ PartPiece "properties",
-              PartColumn,
-              PartPiece "timewindow",
-              PartColumn,
-              PartPiece "time",
-              PartColumn,
-              PartPiece "ord",
-              PartColumn,
-              PartPiece "lt",
-              PartColumn,
-              PartPiece "2h"
-            ]
-        )
+        [ PartPiece "properties",
+          PartColumn,
+          PartPiece "timewindow",
+          PartColumn,
+          PartPiece "time",
+          PartColumn,
+          PartPiece "ord",
+          PartColumn,
+          PartPiece "lt",
+          PartColumn,
+          PartPiece "2h"
+        ]
       parsesValidSpec partsP
       it "parses back whatever 'renderParts' renders" $
-        forAllValid $
-          \parts ->
-            let t = renderParts parts
-             in case parseParts t of
-                  Left err -> expectationFailure $ show err
-                  Right parts' -> parts' `shouldBe` parts
+        forAllValid $ \parts ->
+          let t = renderParts parts
+           in case parseParts t of
+                Left err -> expectationFailure $ show err
+                Right parts' -> parts' `shouldBe` parts
   describe "Parsing" $ do
     genValidSpec @Ast
     describe "astP" $ do
