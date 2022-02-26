@@ -185,9 +185,15 @@ partP =
       void (char '(') >> pure (PartParen OpenParen),
       void (char ')') >> pure (PartParen ClosedParen),
       void (char ' ') >> pure PartSpace,
-      try $ void (string "and") >> pure (PartBinOp AndOp),
-      try $ void (string "or") >> pure (PartBinOp OrOp),
-      PartPiece . Piece . T.pack <$> many1 (satisfy (validationIsValid . validateRestrictedChar))
+      do
+        letters <- many1 $
+          satisfy $ \c ->
+            validationIsValid (validateRestrictedChar c)
+              && c `notElem` (":() " :: [Char])
+        pure $ case letters of
+          "and" -> PartBinOp AndOp
+          "or" -> PartBinOp OrOp
+          p -> PartPiece $ Piece $ T.pack p
     ]
 
 type TP = Parsec Text ()

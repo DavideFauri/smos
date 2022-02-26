@@ -1,17 +1,14 @@
-Parts
-  { unParts =
-      [ PartPiece "snd"
-      , PartColumn
-      , PartPiece "cursor"
-      , PartColumn
-      , PartPiece "state"
-      , PartColumn
-      , PartPiece "maybe"
-      , PartColumn
-      , PartPiece "False"
-      , PartColumn
-      , PartPiece "sub"
-      , PartColumn
-      , PartPiece "TODO"
-      ]
-  }
+[ PartPiece "snd"
+, PartColumn
+, PartPiece "cursor"
+, PartColumn
+, PartPiece "state"
+, PartColumn
+, PartPiece "maybe"
+, PartColumn
+, PartPiece "False"
+, PartColumn
+, PartPiece "sub"
+, PartColumn
+, PartPiece "TODO"
+]

@@ -1,13 +1,10 @@
-Parts
-  { unParts =
-      [ PartPiece "snd"
-      , PartColumn
-      , PartPiece "cursor"
-      , PartColumn
-      , PartPiece "header"
-      , PartColumn
-      , PartPiece "sub"
-      , PartColumn
-      , PartPiece "find"
-      ]
-  }
+[ PartPiece "snd"
+, PartColumn
+, PartPiece "cursor"
+, PartColumn
+, PartPiece "header"
+, PartColumn
+, PartPiece "sub"
+, PartColumn
+, PartPiece "find"
+]

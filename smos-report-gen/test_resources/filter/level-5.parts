@@ -1,9 +1,6 @@
-Parts
-  { unParts =
-      [ PartPiece "snd"
-      , PartColumn
-      , PartPiece "level"
-      , PartColumn
-      , PartPiece "5"
-      ]
-  }
+[ PartPiece "snd"
+, PartColumn
+, PartPiece "level"
+, PartColumn
+, PartPiece "5"
+]
