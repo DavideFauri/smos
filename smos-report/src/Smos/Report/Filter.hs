@@ -1012,8 +1012,13 @@ tcSub =
 tcOrd :: (Validity a, NFData a, Show a, Ord a, FilterArgument a, FilterOrd a) => TC (Filter a)
 tcOrd =
   let ordTC =
-        tcArgumentOp $ \comparison -> tcArgumentPiece $ \arg -> pure $ FilterOrd comparison arg
-   in tcChoices [tcThisKeyWordOp KeyWordOrd ordTC, ordTC]
+        tcArgumentOp $ \comparison ->
+          tcArgumentPiece $ \arg ->
+            pure $ FilterOrd comparison arg
+   in tcChoices
+        [ tcThisKeyWordOp KeyWordOrd ordTC,
+          ordTC
+        ]
 
 tcTimeFilter :: TC (Filter Time)
 tcTimeFilter = tcWithTopLevelBranches tcOrd
@@ -1031,7 +1036,9 @@ tcMaybeFilter :: TC (Filter a) -> TC (Filter (Maybe a))
 tcMaybeFilter tc =
   tcWithTopLevelBranches $
     tcChoices
-      [ tcThisKeyWordOp KeyWordMaybe $ tcArgumentOp $ \b a -> FilterMaybe b <$> tc a,
+      [ tcThisKeyWordOp KeyWordMaybe $
+          tcArgumentOp $ \b a ->
+            FilterMaybe b <$> tc a,
         fmap (FilterMaybe False) . tc
       ]
 
@@ -1039,7 +1046,9 @@ tcPropertyValueFilter :: TC (Filter PropertyValue)
 tcPropertyValueFilter =
   tcWithTopLevelBranches $
     tcChoices
-      [tcThisKeyWordOp KeyWordTime $ fmap FilterPropertyTime . tcMaybeFilter tcTimeFilter, tcSub]
+      [ tcThisKeyWordOp KeyWordTime $ fmap FilterPropertyTime . tcMaybeFilter tcTimeFilter,
+        tcSub
+      ]
 
 tcMapFilter ::
   (Validity k, NFData k, Show k, Ord k, FilterArgument k) =>

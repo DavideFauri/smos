@@ -76,6 +76,24 @@ spec = do
               PartParen ClosedParen
             ]
         )
+
+      parseSuccessSpec
+        partsP
+        "properties:timewindow:time:ord:lt:2h"
+        ( Parts
+            [ PartPiece "properties",
+              PartColumn,
+              PartPiece "timewindow",
+              PartColumn,
+              PartPiece "time",
+              PartColumn,
+              PartPiece "ord",
+              PartColumn,
+              PartPiece "lt",
+              PartColumn,
+              PartPiece "2h"
+            ]
+        )
       parsesValidSpec partsP
       it "parses back whatever 'renderParts' renders" $
         forAllValid $
@@ -202,11 +220,19 @@ spec = do
         tcOrd
         (AstUnOp (Piece "ord") (AstUnOp (Piece "gt") (AstPiece (Piece "6h"))))
         (FilterOrd GTC (Hours 6))
-    describe "tcTimeFilter" $
+      tcSpec
+        tcOrd
+        (AstUnOp (Piece "le") (AstPiece (Piece "2h")))
+        (FilterOrd LEC (Hours 2))
+    describe "tcTimeFilter" $ do
       tcSpec
         tcTimeFilter
         (AstUnOp (Piece "ord") (AstUnOp (Piece "gt") (AstPiece (Piece "6h"))))
         (FilterOrd GTC (Hours 6))
+      tcSpec
+        tcTimeFilter
+        (AstUnOp (Piece "lt") (AstPiece (Piece "2h")))
+        (FilterOrd LTC (Hours 2))
     describe "tcTagFilter" $ do
       tcSpec
         tcTagFilter
@@ -258,6 +284,37 @@ spec = do
             )
         )
         (FilterPropertyTime (FilterMaybe False (FilterOrd GTC (Seconds 7))))
+      tcSpec
+        tcPropertyValueFilter
+        ( AstUnOp
+            "time"
+            ( AstUnOp
+                "lt"
+                (AstPiece "2h")
+            )
+        )
+        ( FilterPropertyTime $
+            FilterMaybe False $
+              FilterOrd LTC $
+                Hours 2
+        )
+      tcSpec
+        tcPropertyValueFilter
+        ( AstUnOp
+            "time"
+            ( AstUnOp
+                "ord"
+                ( AstUnOp
+                    "lt"
+                    (AstPiece "2h")
+                )
+            )
+        )
+        ( FilterPropertyTime $
+            FilterMaybe False $
+              FilterOrd LTC $
+                Hours 2
+        )
     describe "tcMapFilter" $
       tcSpec
         (tcMapFilter tcPropertyValueFilter)
@@ -413,6 +470,42 @@ spec = do
                 (FilterMaybe False (FilterSub "cssyd"))
             )
         )
+      tcSpec
+        tcEntryFilter
+        ( AstUnOp
+            "properties"
+            ( AstUnOp
+                "val"
+                ( AstUnOp
+                    "timewindow"
+                    ( AstUnOp
+                        "maybe"
+                        ( AstUnOp
+                            "False"
+                            ( AstUnOp
+                                "time"
+                                ( AstUnOp
+                                    "maybe"
+                                    ( AstUnOp
+                                        "False"
+                                        (AstUnOp "ord" (AstUnOp "lt" (AstPiece "2h")))
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+        ( FilterEntryProperties $
+            FilterMapVal (fromJust $ propertyName "timewindow") $
+              FilterMaybe False $
+                FilterPropertyTime $
+                  FilterMaybe False $
+                    FilterOrd LTC $
+                      Hours 2
+        )
+
     describe "tcForestCursorFilter" $ do
       tcSpec
         (tcForestCursorFilter tcEntryFilter)
@@ -576,6 +669,7 @@ spec = do
                       Hours 2
     pee "properties:timewindow:time:lt:2h" propertyTimeLt2h
     pee "properties:timewindow:time:ord:lt:2h" propertyTimeLt2h
+    pee "properties:timewindow:time:maybe:false:lt:2h" propertyTimeLt2h
     pee "properties:timewindow:time:maybe:false:ord:lt:2h" propertyTimeLt2h
     pee "properties:timewindow:time:maybe:False:ord:lt:2h" propertyTimeLt2h
     pee "properties:timewindow:maybe:false:time:maybe:False:ord:lt:2h" propertyTimeLt2h
