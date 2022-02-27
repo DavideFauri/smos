@@ -1,1 +1,1 @@
-AstUnOp "snd" (AstUnOp "level" (AstPiece "5"))
+AstUnOp "level" (AstPiece "5")

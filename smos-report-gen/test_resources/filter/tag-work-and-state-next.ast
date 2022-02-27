@@ -1,11 +1,4 @@
-AstUnOp
-  "snd"
-  (AstUnOp
-     "cursor"
-     (AstBinOp
-        (AstUnOp "tags" (AstUnOp "any" (AstUnOp "sub" (AstPiece "work"))))
-        AndOp
-        (AstUnOp
-           "state"
-           (AstUnOp
-              "maybe" (AstUnOp "False" (AstUnOp "sub" (AstPiece "NEXT")))))))
+AstBinOp
+  (AstUnOp "tag" (AstPiece "work"))
+  AndOp
+  (AstUnOp "state" (AstPiece "NEXT"))

@@ -1,1 +1,1 @@
-AstUnOp "fst" (AstUnOp "file" (AstPiece "my-client.smos"))
+AstUnOp "file" (AstPiece "my-client.smos")

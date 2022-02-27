@@ -1,1 +1,1 @@
-snd:parent:cursor:tags:any:sub:work
+parent:tag:work

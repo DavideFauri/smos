@@ -1,6 +1,1 @@
-[ PartPiece "snd"
-, PartColumn
-, PartPiece "level"
-, PartColumn
-, PartPiece "5"
-]
+[ PartPiece "level" , PartColumn , PartPiece "5" ]

@@ -1,10 +1,1 @@
-AstUnOp
-  "snd"
-  (AstUnOp
-     "ancestor"
-     (AstUnOp
-        "cursor"
-        (AstUnOp
-           "state"
-           (AstUnOp
-              "maybe" (AstUnOp "False" (AstUnOp "sub" (AstPiece "DONE")))))))
+AstUnOp "ancestor" (AstUnOp "state" (AstPiece "DONE"))

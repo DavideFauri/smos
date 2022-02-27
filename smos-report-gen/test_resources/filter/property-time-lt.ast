@@ -1,20 +1,4 @@
 AstUnOp
-  "snd"
+  "property"
   (AstUnOp
-     "cursor"
-     (AstUnOp
-        "properties"
-        (AstUnOp
-           "val"
-           (AstUnOp
-              "timewindow"
-              (AstUnOp
-                 "maybe"
-                 (AstUnOp
-                    "False"
-                    (AstUnOp
-                       "time"
-                       (AstUnOp
-                          "maybe"
-                          (AstUnOp
-                             "False" (AstUnOp "ord" (AstUnOp "lt" (AstPiece "2h"))))))))))))
+     "timewindow" (AstUnOp "time" (AstUnOp "lt" (AstPiece "2h"))))

@@ -1,24 +1,8 @@
-[ PartPiece "snd"
-, PartColumn
-, PartPiece "cursor"
-, PartColumn
-, PartPiece "properties"
-, PartColumn
-, PartPiece "val"
+[ PartPiece "property"
 , PartColumn
 , PartPiece "timewindow"
 , PartColumn
-, PartPiece "maybe"
-, PartColumn
-, PartPiece "False"
-, PartColumn
 , PartPiece "time"
-, PartColumn
-, PartPiece "maybe"
-, PartColumn
-, PartPiece "False"
-, PartColumn
-, PartPiece "ord"
 , PartColumn
 , PartPiece "lt"
 , PartColumn

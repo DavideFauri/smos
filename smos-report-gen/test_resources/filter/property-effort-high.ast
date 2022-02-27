@@ -1,12 +1,1 @@
-AstUnOp
-  "snd"
-  (AstUnOp
-     "cursor"
-     (AstUnOp
-        "properties"
-        (AstUnOp
-           "val"
-           (AstUnOp
-              "property"
-              (AstUnOp
-                 "maybe" (AstUnOp "False" (AstUnOp "sub" (AstPiece "high'"))))))))
+AstUnOp "property" (AstUnOp "property" (AstPiece "high'"))

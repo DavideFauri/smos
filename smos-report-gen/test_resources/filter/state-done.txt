@@ -1,1 +1,1 @@
-snd:ancestor:cursor:state:maybe:False:sub:DONE
+ancestor:state:DONE

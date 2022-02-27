@@ -1,5 +1,1 @@
-AstUnOp
-  "snd"
-  (AstUnOp
-     "cursor"
-     (AstUnOp "properties" (AstUnOp "has" (AstPiece "effort"))))
+AstUnOp "property" (AstPiece "effort")

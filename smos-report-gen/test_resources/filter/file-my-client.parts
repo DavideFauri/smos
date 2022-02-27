@@ -1,6 +1,1 @@
-[ PartPiece "fst"
-, PartColumn
-, PartPiece "file"
-, PartColumn
-, PartPiece "my-client.smos"
-]
+[ PartPiece "file" , PartColumn , PartPiece "my-client.smos" ]

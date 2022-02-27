@@ -299,8 +299,8 @@ renderKeyWord =
     KeyWordTime -> "time"
     KeyWordHeader -> "header"
     KeyWordTodoState -> "state"
-    KeyWordProperties -> "properties"
-    KeyWordTags -> "tags"
+    KeyWordProperties -> "property"
+    KeyWordTags -> "tag"
     KeyWordCursor -> "cursor"
     KeyWordLevel -> "level"
     KeyWordParent -> "parent"
@@ -663,7 +663,7 @@ instance HasCodec (Filter (Path Rel File, ForestCursor Entry)) where
       "EntryFilter"
       ( bimapCodec
           (left (T.unpack . prettyFilterParseError) . parseEntryFilter)
-          renderFilter
+          renderFilterExplicit
           codec
           <??> entryFilterDocs
       )
@@ -833,6 +833,53 @@ renderFilter = renderParts . renderAstParts . renderFilterAst
 
 renderFilterAst :: Filter a -> Ast
 renderFilterAst = go
+  where
+    go :: Filter a -> Ast
+    go =
+      let pa :: FilterArgument a => a -> Ast
+          pa a = AstPiece $ Piece $ renderArgument a
+          paa :: FilterArgument a => a -> Ast -> Ast
+          paa a = AstUnOp (Piece $ renderArgument a)
+          pkw :: KeyWord -> Ast -> Ast
+          pkw kw = AstUnOp (Piece $ renderKeyWord kw)
+          kwa :: KeyWord -> Filter a -> Ast
+          kwa kw f' = pkw kw $ go f'
+          kwp :: FilterArgument a => KeyWord -> a -> Ast
+          kwp kw a = pkw kw $ pa a
+          kwb :: Filter a -> BinOp -> Filter a -> Ast
+          kwb f1 bo f2 = AstBinOp (go f1) bo (go f2)
+       in \case
+            FilterFile rp -> kwp KeyWordFile rp
+            FilterPropertyTime f' -> kwa KeyWordTime f'
+            FilterEntryHeader f' -> kwa KeyWordHeader f'
+            FilterEntryTodoState f' -> kwa KeyWordTodoState f'
+            FilterEntryProperties f' -> kwa KeyWordProperties f'
+            FilterEntryTags f' -> kwa KeyWordTags f'
+            FilterWithinCursor f' -> go f'
+            FilterLevel l -> kwp KeyWordLevel l
+            FilterAncestor f' -> kwa KeyWordAncestor f'
+            FilterLegacy f' -> kwa KeyWordLegacy f'
+            FilterParent f' -> kwa KeyWordParent f'
+            FilterChild f' -> kwa KeyWordChild f'
+            FilterAny f' -> go f'
+            FilterAll f' -> kwa KeyWordAll f'
+            FilterMapHas k -> pa k
+            FilterMapVal k f' -> paa k $ go f'
+            FilterFst f' -> go f'
+            FilterSnd f' -> go f'
+            FilterMaybe False f' -> go f'
+            FilterMaybe b f' -> pkw KeyWordMaybe $ paa b $ go f'
+            FilterSub t -> pa t
+            FilterOrd o a -> paa o $ pa a
+            FilterNot f' -> kwa KeyWordNot f'
+            FilterOr f1 f2 -> kwb f1 OrOp f2
+            FilterAnd f1 f2 -> kwb f1 AndOp f2
+
+renderFilterExplicit :: Filter a -> Text
+renderFilterExplicit = renderParts . renderAstParts . renderFilterAstExplicit
+
+renderFilterAstExplicit :: Filter a -> Ast
+renderFilterAstExplicit = go
   where
     go :: Filter a -> Ast
     go =

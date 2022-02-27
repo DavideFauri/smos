@@ -531,40 +531,94 @@ spec = do
         producesValid (renderFilterAst @(Path Rel File))
       it "produces valid asts for entryFilters" $
         producesValid (renderFilterAst @(Path Rel File, ForestCursor Entry))
-    describe "parseEntryFilterAst" $
-      it "parses back whatever 'renderFilterAst' renders" $
-        forAllValid $
-          \f ->
-            let t = renderFilterAst f
-             in case parseEntryFilterAst t of
-                  Left err ->
-                    expectationFailure $
-                      unlines
-                        [ "Original filter:",
-                          ppShow f,
-                          "rendered ast:",
-                          ppShow t,
-                          "parse failure:",
-                          show err
-                        ]
-                  Right f' ->
-                    let ctx =
-                          unlines
-                            [ "Original filter:",
-                              ppShow f,
-                              "rendered ast:",
-                              ppShow t,
-                              "parsed filter:",
-                              ppShow f'
-                            ]
-                     in context ctx $ f' `shouldBe` f
-    describe "renderFilter" $
+    describe "parseEntryFilterAst" $ do
+      it "parses back whatever 'renderFilterAstExplicit' renders" $
+        forAllValid $ \f ->
+          let t = renderFilterAstExplicit f
+           in case parseEntryFilterAst t of
+                Left err ->
+                  expectationFailure $
+                    unlines
+                      [ "Original filter:",
+                        ppShow f,
+                        "rendered ast:",
+                        ppShow t,
+                        "parse failure:",
+                        show err
+                      ]
+                Right f' ->
+                  let ctx =
+                        unlines
+                          [ "Original filter:",
+                            ppShow f,
+                            "rendered ast:",
+                            ppShow t,
+                            "parsed filter:",
+                            ppShow f'
+                          ]
+                   in context ctx $ f' `shouldBe` f
+      it "parses back something that renders back to whatever 'renderFilterAst' renders" $
+        forAllValid $ \f ->
+          let t = renderFilterAst (f :: EntryFilter)
+           in case parseEntryFilterAst t of
+                Left err ->
+                  expectationFailure $
+                    unlines
+                      [ "Original filter:",
+                        ppShow f,
+                        "rendered ast:",
+                        ppShow t,
+                        "parse failure:",
+                        show err
+                      ]
+                Right f' ->
+                  let ctx =
+                        unlines
+                          [ "Original filter:",
+                            ppShow f,
+                            "rendered ast:",
+                            ppShow t,
+                            "parsed filter:",
+                            ppShow f'
+                          ]
+                   in context ctx $ renderFilterAst f' `shouldBe` renderFilterAst f
+    describe "renderFilter" $ do
       it "produces valid text" $
-        producesValid (renderFilter @(Path Rel File, ForestCursor Entry))
-    describe "parseEntryFilter" $
-      it "parses back whatever 'renderFilter' renders" $
+        producesValid
+          (renderFilter @(Path Rel File, ForestCursor Entry))
+      let equivalentRender parseFuncName parseFunc =
+            it ("renders text that is functionally equivalent to renderFilterExplicit when parsed with " <> parseFuncName) $
+              forAllValid $ \f ->
+                forAllValid $ \tup ->
+                  let renderedConcise = renderFilter f
+                      renderedExplicit = renderFilterExplicit f
+                   in case (,) <$> parseFunc renderedConcise <*> parseFunc renderedExplicit of
+                        Left err -> expectationFailure $ T.unpack $ prettyFilterParseError err
+                        Right (conciseFilter, explicitFilter) -> do
+                          let ctx =
+                                unlines
+                                  [ "original filter:",
+                                    ppShow f,
+                                    "rendered concise:",
+                                    show renderedConcise,
+                                    "rendered explicit:",
+                                    show renderedExplicit,
+                                    "parsed concise:",
+                                    show conciseFilter,
+                                    "parsed explicit:",
+                                    show explicitFilter
+                                  ]
+                           in context ctx $
+                                filterPredicate (conciseFilter `asTypeOf` f) tup
+                                  `shouldBe` filterPredicate (explicitFilter `asTypeOf` f) tup
+      equivalentRender "parseProjectFilter" parseProjectFilter
+      xdescribe "Does not hold because of the way quantifiers interact" $
+        -- This is fine in practice (we have the same test below), but the property doesn't hold in general.
+        equivalentRender "parseEntryFilter" parseEntryFilter
+    describe "parseEntryFilter" $ do
+      it "parses back whatever 'renderFilterExplicit' renders" $
         forAllValid $ \f -> do
-          let t = renderFilter f
+          let t = renderFilterExplicit f
           case parseEntryFilter t of
             Left err ->
               expectationFailure $
@@ -587,6 +641,31 @@ spec = do
                         ppShow f'
                       ]
                in context ctx $ f' `shouldBe` f
+      it "parses back something that renders to the same as whatever 'renderFilter' renders" $
+        forAllValid $ \f -> do
+          let t = renderFilter (f :: EntryFilter)
+          case parseEntryFilter t of
+            Left err ->
+              expectationFailure $
+                unlines
+                  [ "Original filter:",
+                    ppShow f,
+                    "rendered text:",
+                    show t,
+                    "parse failure:",
+                    show err
+                  ]
+            Right f' ->
+              let ctx =
+                    unlines
+                      [ "Original filter:",
+                        ppShow f,
+                        "rendered text:",
+                        show t,
+                        "parsed filter:",
+                        ppShow f'
+                      ]
+               in context ctx $ renderFilter f' `shouldBe` renderFilter f
   describe "foldFilterAnd" $
     it "produces valid results" $
       producesValid (foldFilterAnd @Header)
@@ -703,12 +782,19 @@ spec = do
             astFile
             (ppShow (renderFilterAst entryFilter) <> "\n")
 
-        it "roundtrips through an ast" $
-          let rendered = renderFilterAst entryFilter
+        it "roundtrips through an ast using renderFilterAstExplicit" $
+          let rendered = renderFilterAstExplicit entryFilter
               parsed = parseEntryFilterAst rendered
            in context (show rendered) $ case parsed of
                 Left err -> expectationFailure $ T.unpack $ prettyFilterTypeError err
                 Right actual -> actual `shouldBe` entryFilter
+
+        it "roundtrips through an ast and back using renderFilterAst" $
+          let rendered = renderFilterAst entryFilter
+              parsed = parseEntryFilterAst rendered
+           in context (show rendered) $ case parsed of
+                Left err -> expectationFailure $ T.unpack $ prettyFilterTypeError err
+                Right actual -> renderFilterAst actual `shouldBe` renderFilterAst entryFilter
 
         let partsFile = fileWithExtension "parts"
         it "renders to the same parts as before" $
@@ -716,8 +802,8 @@ spec = do
             partsFile
             (ppShow (renderAstParts (renderFilterAst entryFilter)) <> "\n")
 
-        it "roundtrips through parts" $
-          let rendered = renderAstParts $ renderFilterAst entryFilter
+        it "roundtrips through parts when rendered explicitly" $
+          let rendered = renderAstParts $ renderFilterAstExplicit entryFilter
               parsed = do
                 ast <- left ParsingError $ parseAstParts rendered
                 left TypeCheckingError $ parseEntryFilterAst ast
@@ -725,18 +811,59 @@ spec = do
                 Left err -> expectationFailure $ T.unpack $ prettyFilterParseError err
                 Right actual -> actual `shouldBe` entryFilter
 
+        it "roundtrips through parts and back" $
+          let render = renderAstParts . renderFilterAst
+              rendered = render entryFilter
+              parsed = do
+                ast <- left ParsingError $ parseAstParts rendered
+                left TypeCheckingError $ parseEntryFilterAst ast
+           in context (show rendered) $ case parsed of
+                Left err -> expectationFailure $ T.unpack $ prettyFilterParseError err
+                Right actual -> render actual `shouldBe` render entryFilter
+
         let textFile = fileWithExtension "txt"
         it "renders to the same text as before" $
           pureGoldenTextFile
             textFile
             (renderFilter entryFilter <> "\n")
 
-        it "roundtrips through text" $
-          let rendered = renderFilter entryFilter
+        it "roundtrips through text when rendered explicitly" $
+          let rendered = renderFilterExplicit entryFilter
               parsed = parseEntryFilter rendered
            in context (show rendered) $ case parsed of
                 Left err -> expectationFailure $ T.unpack $ prettyFilterParseError err
                 Right actual -> actual `shouldBe` entryFilter
+
+        it "roundtrips through text and back" $
+          let rendered = renderFilter entryFilter
+              parsed = parseEntryFilter rendered
+           in context (show rendered) $ case parsed of
+                Left err -> expectationFailure $ T.unpack $ prettyFilterParseError err
+                Right actual -> renderFilter actual `shouldBe` renderFilter entryFilter
+
+        it "renders to something functionally equivalent when not rendered explicitly" $
+          forAllValid $ \tup ->
+            let renderedConcise = renderFilter entryFilter
+                renderedExplicit = renderFilterExplicit entryFilter
+             in case (,) <$> parseEntryFilter renderedConcise <*> parseEntryFilter renderedExplicit of
+                  Left err -> expectationFailure $ T.unpack $ prettyFilterParseError err
+                  Right (conciseFilter, explicitFilter) -> do
+                    let ctx =
+                          unlines
+                            [ "original filter:",
+                              ppShow entryFilter,
+                              "rendered concise:",
+                              show renderedConcise,
+                              "rendered explicit:",
+                              show renderedExplicit,
+                              "parsed concise:",
+                              show conciseFilter,
+                              "parsed explicit:",
+                              show explicitFilter
+                            ]
+                     in context ctx $
+                          filterPredicate (conciseFilter `asTypeOf` entryFilter) tup
+                            `shouldBe` filterPredicate (explicitFilter `asTypeOf` entryFilter) tup
 
 tcSpec :: (Show a, Eq a) => TC a -> Ast -> a -> Spec
 tcSpec tc ast a =

@@ -1,16 +1,6 @@
-[ PartPiece "snd"
-, PartColumn
-, PartPiece "legacy"
-, PartColumn
-, PartPiece "cursor"
+[ PartPiece "legacy"
 , PartColumn
 , PartPiece "state"
-, PartColumn
-, PartPiece "maybe"
-, PartColumn
-, PartPiece "False"
-, PartColumn
-, PartPiece "sub"
 , PartColumn
 , PartPiece "DONE"
 ]

@@ -1,6 +1,1 @@
-AstUnOp
-  "snd"
-  (AstUnOp
-     "cursor"
-     (AstUnOp
-        "tags" (AstUnOp "any" (AstUnOp "sub" (AstPiece "online")))))
+AstUnOp "tag" (AstPiece "online")

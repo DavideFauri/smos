@@ -1,11 +1,4 @@
-AstUnOp
-  "snd"
-  (AstBinOp
-     (AstUnOp "level" (AstPiece "0"))
-     OrOp
-     (AstUnOp
-        "cursor"
-        (AstUnOp
-           "state"
-           (AstUnOp
-              "maybe" (AstUnOp "False" (AstUnOp "sub" (AstPiece "DONE")))))))
+AstBinOp
+  (AstUnOp "level" (AstPiece "0"))
+  OrOp
+  (AstUnOp "state" (AstPiece "DONE"))

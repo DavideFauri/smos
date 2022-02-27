@@ -1,14 +1,6 @@
-[ PartPiece "snd"
+[ PartPiece "child"
 , PartColumn
-, PartPiece "child"
-, PartColumn
-, PartPiece "cursor"
-, PartColumn
-, PartPiece "tags"
-, PartColumn
-, PartPiece "any"
-, PartColumn
-, PartPiece "sub"
+, PartPiece "tag"
 , PartColumn
 , PartPiece "work"
 ]

@@ -1,4 +1,1 @@
-AstUnOp
-  "snd"
-  (AstUnOp
-     "cursor" (AstUnOp "header" (AstUnOp "sub" (AstPiece "find"))))
+AstUnOp "header" (AstPiece "find")

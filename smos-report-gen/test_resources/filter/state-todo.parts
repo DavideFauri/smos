@@ -1,14 +1,1 @@
-[ PartPiece "snd"
-, PartColumn
-, PartPiece "cursor"
-, PartColumn
-, PartPiece "state"
-, PartColumn
-, PartPiece "maybe"
-, PartColumn
-, PartPiece "False"
-, PartColumn
-, PartPiece "sub"
-, PartColumn
-, PartPiece "TODO"
-]
+[ PartPiece "state" , PartColumn , PartPiece "TODO" ]

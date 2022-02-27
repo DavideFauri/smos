@@ -1,8 +1,1 @@
-AstUnOp
-  "snd"
-  (AstUnOp
-     "child"
-     (AstUnOp
-        "cursor"
-        (AstUnOp
-           "tags" (AstUnOp "any" (AstUnOp "sub" (AstPiece "work"))))))
+AstUnOp "child" (AstUnOp "tag" (AstPiece "work"))

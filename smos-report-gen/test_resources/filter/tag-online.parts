@@ -1,12 +1,1 @@
-[ PartPiece "snd"
-, PartColumn
-, PartPiece "cursor"
-, PartColumn
-, PartPiece "tags"
-, PartColumn
-, PartPiece "any"
-, PartColumn
-, PartPiece "sub"
-, PartColumn
-, PartPiece "online"
-]
+[ PartPiece "tag" , PartColumn , PartPiece "online" ]

@@ -1,1 +1,1 @@
-fst:file:my-client.smos
+file:my-client.smos

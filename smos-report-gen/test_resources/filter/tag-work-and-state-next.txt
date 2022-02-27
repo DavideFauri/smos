@@ -1,1 +1,1 @@
-snd:cursor:(tags:any:sub:work and state:maybe:False:sub:NEXT)
+(tag:work and state:NEXT)
