@@ -5,6 +5,9 @@ author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
 license: MIT
 
+extra-source-files:
+  - test_resources/**/*
+
 library:
   source-dirs: src/
   ghc-options: -Wall
@@ -61,5 +64,6 @@ tests:
     - genvalidity-sydtest
     - genvalidity-text
     - github
+    - smos-data-gen
     - smos-github
     - sydtest

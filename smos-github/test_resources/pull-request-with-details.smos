@@ -1,0 +1,6 @@
+version: 2.0.0
+value:
+- header: Resolve autodocodec pull request 18
+  properties:
+    url: https://github.com/NorfairKing/autodocodec/pull/18
+    title: Disjoint Codecs
