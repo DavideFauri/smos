@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.4.
+-- This file has been generated from package.yaml by hpack version 0.34.5.
 --
 -- see: https://github.com/sol/hpack
 
@@ -16,7 +16,9 @@ library
   exposed-modules:
       Smos.GitHub
       Smos.GitHub.Command
+      Smos.GitHub.Command.Import
       Smos.GitHub.Command.List
+      Smos.GitHub.Issue
       Smos.GitHub.OptParse
       Smos.GitHub.OptParse.Types
   other-modules:
@@ -38,6 +40,7 @@ library
     , network-uri
     , optparse-applicative
     , path
+    , path-io
     , safe-coloured-text-terminfo
     , smos-data
     , smos-query
@@ -71,6 +74,7 @@ test-suite smos-data-test
       sydtest-discover:sydtest-discover
   build-depends:
       QuickCheck
+    , base
     , genvalidity-sydtest
     , smos-github
     , sydtest

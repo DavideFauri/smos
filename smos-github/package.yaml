@@ -20,6 +20,7 @@ library:
     - network-uri
     - optparse-applicative
     - path
+    - path-io
     - safe-coloured-text-terminfo
     - smos-data
     - smos-query
@@ -52,6 +53,7 @@ tests:
     - -with-rtsopts=-N
     - -Wall
     dependencies:
+    - base
     - QuickCheck
     - genvalidity-sydtest
     - smos-github
