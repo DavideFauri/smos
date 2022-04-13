@@ -5,6 +5,7 @@ module Smos.GitHub.IssueSpec (spec) where
 import GitHub
 import GitHub.Data.Name
 import Smos.GitHub.Issue
+import Smos.GitHub.Issue.Gen ()
 import Test.Syd
 
 spec :: Spec

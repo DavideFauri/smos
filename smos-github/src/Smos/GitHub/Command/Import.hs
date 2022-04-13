@@ -10,6 +10,8 @@ import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import Data.Validity
+import Data.Validity.Text ()
 import GHC.Generics (Generic)
 import GitHub (github)
 import qualified GitHub
@@ -104,6 +106,8 @@ data ImportDetails = ImportDetails
   { importDetailTitle :: Text
   }
   deriving (Show, Eq, Generic)
+
+instance Validity ImportDetails
 
 fetchDetails :: GitHub.Auth -> GitHubUrl -> IO ImportDetails
 fetchDetails auth gitHubUrl = do

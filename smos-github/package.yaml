@@ -12,6 +12,7 @@ library:
   dependencies:
     - aeson
     - async
+    - autodocodec
     - base
     - conduit
     - containers
@@ -27,7 +28,8 @@ library:
     - smos-report
     - text
     - time
-    - autodocodec
+    - validity
+    - validity-text
 
 executables:
   smos-github:
@@ -53,9 +55,11 @@ tests:
     - -with-rtsopts=-N
     - -Wall
     dependencies:
-    - base
     - QuickCheck
+    - base
+    - genvalidity
     - genvalidity-sydtest
+    - genvalidity-text
+    - github
     - smos-github
     - sydtest
-    - github
