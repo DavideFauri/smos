@@ -17,9 +17,6 @@ parseGitHubUrl url = do
   ua <- uriAuthority uri
   guard (uriRegName ua == "github.com")
   let segments = pathSegments uri
-  -- Url is of this form
-  -- https://github.com/owner/repo/pull/167
-  -- https://github.com/owner/repo/issues/167
   let mkN = N . T.pack
   case segments of
     (owner : repo : "pull" : num : _) -> PullRequestUrl (mkN owner) (mkN repo) <$> (IssueNumber <$> readMaybe num)
