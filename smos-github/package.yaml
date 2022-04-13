@@ -40,3 +40,20 @@ executables:
     dependencies:
     - base
     - smos-github
+
+tests:
+  smos-data-test:
+    main: Spec.hs
+    source-dirs: test/
+    build-tools: sydtest-discover
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -Wall
+    dependencies:
+    - QuickCheck
+    - genvalidity-sydtest
+    - smos-github
+    - sydtest
+
