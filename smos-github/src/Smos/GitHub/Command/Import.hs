@@ -10,6 +10,7 @@ import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import Data.Time
 import Data.Validity
 import Data.Validity.Text ()
 import GHC.Generics (Generic)
@@ -35,9 +36,10 @@ githubImport Settings {..} ImportSettings {..} = do
       let mAuth = GitHub.OAuth . TE.encodeUtf8 <$> setGithubOauthToken
       mDetails <- forM mAuth $ \auth ->
         fetchDetails auth gitHubUrl
+      now <- getCurrentTime
       case (,)
         <$> renderProjectPath gitHubUrl
-        <*> renderSmosProject importSetUrl gitHubUrl mDetails of
+        <*> renderSmosProject now importSetUrl gitHubUrl mDetails of
         Nothing -> die "Failed to import this issue/pr." -- TODO could we give a better error?
         Just (projectPath, smosFile) -> do
           let path = projectsDir </> projectPath
@@ -65,40 +67,63 @@ renderProjectPath gitHubUrl = do
             ]
   parseRelFile filePath
 
-renderSmosProject :: String -> GitHubUrl -> Maybe ImportDetails -> Maybe SmosFile
-renderSmosProject urlString gitHubUrl mDetails = do
-  title <- case gitHubUrl of
-    IssueUrl _ repoName issueNumber -> do
-      let repoNameText = GitHub.untagName repoName
-      let issueNumberText = T.pack $ show $ GitHub.unIssueNumber issueNumber
-      header $
-        mconcat
-          [ "Resolve ",
-            repoNameText,
-            " issue ",
-            issueNumberText
-          ]
-    PullRequestUrl _ repoName pullRequestNumber -> do
-      let repoNameText = GitHub.untagName repoName
-      let pullRequestNumberText = T.pack $ show $ GitHub.unIssueNumber pullRequestNumber
-      header $
-        mconcat
-          [ "Resolve ",
-            repoNameText,
-            " pull request ",
-            pullRequestNumberText
-          ]
+renderSmosProject :: UTCTime -> String -> GitHubUrl -> Maybe ImportDetails -> Maybe SmosFile
+renderSmosProject now urlString gitHubUrl mDetails = do
+  let ownerNameText = GitHub.untagName $ case gitHubUrl of
+        IssueUrl ownerName _ _ -> ownerName
+        PullRequestUrl ownerName _ _ -> ownerName
+  let repoNameText = GitHub.untagName $ case gitHubUrl of
+        IssueUrl _ repoName _ -> repoName
+        PullRequestUrl _ repoName _ -> repoName
+  let titleText = case gitHubUrl of
+        IssueUrl _ _ issueNumber ->
+          let issueNumberText = T.pack $ show $ GitHub.unIssueNumber issueNumber
+           in mconcat
+                [ repoNameText,
+                  " issue ",
+                  issueNumberText
+                ]
+        PullRequestUrl _ _ pullRequestNumber ->
+          let pullRequestNumberText = T.pack $ show $ GitHub.unIssueNumber pullRequestNumber
+           in mconcat
+                [ repoNameText,
+                  " pull request ",
+                  pullRequestNumberText
+                ]
+  title <- header titleText
   urlProperty <- propertyValue $ T.pack urlString
+  goalProperty <-
+    propertyValue $
+      T.unwords
+        [ "Resolve",
+          titleText
+        ]
+  ownerProperty <- propertyValue ownerNameText
+  repoProperty <- propertyValue repoNameText
   detailProperties <- case mDetails of
     Nothing -> pure M.empty
     Just ImportDetails {..} -> do
       titleProperty <- propertyValue importDetailTitle
       pure $ M.singleton "title" titleProperty
-  let properties = M.singleton "url" urlProperty <> detailProperties
+  let properties =
+        mconcat
+          [ M.fromList
+              [ ("url", urlProperty),
+                ("goal", goalProperty),
+                ("owner", ownerProperty),
+                ("repo", repoProperty)
+              ],
+            detailProperties
+          ]
+  titleEntry <-
+    entrySetState
+      now
+      (Just "TODO")
+      ((newEntry title) {entryProperties = properties})
   pure $
     SmosFile
       [ Node
-          ((newEntry title) {entryProperties = properties})
+          titleEntry
           []
       ]
 

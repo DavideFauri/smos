@@ -3,6 +3,8 @@
 
 module Smos.GitHub.Command.ImportSpec (spec) where
 
+import Data.GenValidity.Time ()
+import Data.Time
 import GitHub
 import GitHub.Data.Name
 import Smos.Data.TestUtils
@@ -21,10 +23,11 @@ spec = do
       producesValid renderProjectPath
   describe "renderSmosProjects" $ do
     it "produces valid smosFiles" $
-      producesValid3
-        renderSmosProject
+      forAllValid $ producesValid3 . renderSmosProject
+    let now = UTCTime (fromGregorian 2022 04 14) 36946
     it "produces the same smos file for this hypothetical issue" $
       case renderSmosProject
+        now
         "https://github.com/NorfairKing/autodocodec/pull/18"
         ( PullRequestUrl
             (N "NorfairKing")
@@ -37,6 +40,7 @@ spec = do
           pure $ pureGoldenSmosFile "test_resources/pull-request-with-details.smos" smosFile
     it "produces the same smos file for this hypothetical issue" $
       case renderSmosProject
+        now
         "https://github.com/NorfairKing/autodocodec/pull/18"
         ( PullRequestUrl
             (N "NorfairKing")

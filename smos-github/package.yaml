@@ -63,7 +63,9 @@ tests:
     - genvalidity
     - genvalidity-sydtest
     - genvalidity-text
+    - genvalidity-time
     - github
     - smos-data-gen
     - smos-github
     - sydtest
+    - time

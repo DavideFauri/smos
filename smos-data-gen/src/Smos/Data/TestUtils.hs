@@ -3,6 +3,7 @@
 module Smos.Data.TestUtils where
 
 import Control.Monad
+import qualified Data.Text.Encoding as TE
 import Path.IO
 import Smos.Data
 import Test.Syd
@@ -27,11 +28,13 @@ goldenSmosFile path produceSmosFile =
         if actual == expected
           then Nothing
           else
-            Just $
-              Context
-                ( bytestringsNotEqualButShouldHaveBeenEqual
-                    (smosFileBS actual)
-                    (smosFileBS expected)
-                )
-                (goldenContext path)
+            let actualBS = smosFileBS actual
+                expectedBS = smosFileBS expected
+                assertion = case (,) <$> TE.decodeUtf8' actualBS <*> TE.decodeUtf8' expectedBS of
+                  Left _ -> bytestringsNotEqualButShouldHaveBeenEqual actualBS expectedBS
+                  Right (actualText, expectedText) -> textsNotEqualButShouldHaveBeenEqual actualText expectedText
+             in Just $
+                  Context
+                    assertion
+                    (goldenContext path)
     }
