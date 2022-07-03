@@ -17,22 +17,7 @@ mkStyle = do
     Nothing -> do
       d <- resolveDir' "style"
       runIO $ putStrLn $ unwords ["WARNING: Including style files from dir at path: ", fromAbsDir d]
-      scssFile <- resolveFile d "mybulma.scss"
       cssFile <- resolveFile d "mybulma.css"
-      qAddDependentFile $ fromAbsFile scssFile
-      runIO $ do
-        putStrLn $ unwords ["Regenerating the stylesheet at", fromAbsFile cssFile]
-        ec <-
-          system $
-            unwords
-              [ "sass",
-                "--sourcemap=none",
-                concat [fromAbsFile scssFile, ":", fromAbsFile cssFile],
-                if development then "" else "--style compressed"
-              ]
-        case ec of
-          ExitSuccess -> pure ()
-          ExitFailure i -> die $ "Regenerating the stylesheet failed with exit code: " <> show i
       pure $ embedFileAt "index.css" $ fromAbsFile cssFile
     Just f -> do
       runIO $ putStrLn $ unwords ["Including style in:", f]

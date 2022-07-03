@@ -12,7 +12,7 @@ maintainer:     syd@cs-syd.eu
 license:        MIT
 build-type:     Simple
 extra-source-files:
-    style/mybulma.scss
+    style/mybulma.css
 
 library
   exposed-modules:
