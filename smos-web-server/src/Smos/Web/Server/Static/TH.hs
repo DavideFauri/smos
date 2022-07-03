@@ -4,7 +4,6 @@ module Smos.Web.Server.Static.TH
 where
 
 import Language.Haskell.TH
-import Path.IO
 import Smos.Web.Server.Constants
 import Yesod.EmbeddedStatic
 import Yesod.EmbeddedStatic.Remote

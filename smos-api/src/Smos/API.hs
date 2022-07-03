@@ -19,7 +19,7 @@ import Autodocodec
 import Control.Arrow
 import Control.DeepSeq
 import Control.Exception
-import Data.Aeson as JSON (FromJSON, ToJSON, Value)
+import Data.Aeson as JSON (FromJSON, ToJSON)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base64 as Base64
 import qualified Data.ByteString.Char8 as SB8

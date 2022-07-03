@@ -1,13 +1,10 @@
 module Smos.Web.Style.TH where
 
 import Language.Haskell.TH
-import Language.Haskell.TH.Syntax
 import Path
 import Path.IO
 import Smos.Web.Style.Constants
 import System.Environment
-import System.Exit
-import System.Process
 import Yesod.EmbeddedStatic
 
 mkStyle :: Q [Dec]

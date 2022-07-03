@@ -11,7 +11,6 @@ import Autodocodec.Yaml
 import Control.Arrow (left)
 import Control.Monad.Logger
 import Data.Maybe
-import qualified Data.Text as T
 import Data.Version
 import qualified Env
 import Options.Applicative

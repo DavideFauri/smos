@@ -15,7 +15,6 @@ import Smos.Web.Server.Handler.Import
 
 getAccountR :: Handler Html
 getAccountR = withLogin' $ \un t -> do
-  now <- liftIO getCurrentTime
   withNavBar $ do
     token <- genToken
     $(widgetFile "account")

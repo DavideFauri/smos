@@ -3,7 +3,6 @@
 
 module Smos.Web.Server.Handler.Home where
 
-import qualified Data.Text as T
 import Smos.Web.Server.Handler.Import
 
 getHomeR :: Handler Html

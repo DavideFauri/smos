@@ -4,7 +4,6 @@
 
 module Smos.Server.Env where
 
-import Control.Concurrent
 import Control.Monad.Logger
 import Control.Monad.Reader
 import qualified Data.Map as M
@@ -21,7 +20,6 @@ import Servant
 import Servant.Auth.Server
 import Smos.API
 import Smos.Server.DB
-import Smos.Server.OptParse.Types
 
 type ServerHandler = ReaderT ServerEnv (LoggingT Handler)
 

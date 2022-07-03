@@ -7,9 +7,6 @@ module Smos.Server.OptParse.Types where
 
 import Autodocodec
 import Control.Monad.Logger
-import Data.Set (Set)
-import qualified Data.Set as S
-import Data.Text (Text)
 import Data.Time
 import Data.Word
 import GHC.Generics (Generic)

@@ -12,7 +12,6 @@ import Control.Arrow
 import Control.Monad.Logger
 import Data.Maybe
 import Data.SemVer as Version (toString)
-import qualified Data.Set as S
 import qualified Data.Text as T
 import Data.Version
 import qualified Env

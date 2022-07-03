@@ -5,7 +5,6 @@ module Smos.Web.Server.OptParse.Types where
 
 import Autodocodec
 import Control.Monad.Logger
-import Data.Text (Text)
 import GHC.Generics (Generic)
 import Path
 import Servant.Client

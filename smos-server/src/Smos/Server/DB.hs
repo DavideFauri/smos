@@ -22,7 +22,6 @@ where
 
 import Data.ByteString (ByteString)
 import Data.Mergeful.Timed
-import Data.Text (Text)
 import Data.Time
 import Data.Validity
 import Data.Validity.Persist ()
