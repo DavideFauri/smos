@@ -20,9 +20,7 @@ smosDocsSite = do
         App
           { appAssets = assets,
             appStyle = smosWebStyle,
-            appWebserverUrl = settingWebServerUrl,
-            appGoogleAnalyticsTracking = settingGoogleAnalyticsTracking,
-            appGoogleSearchConsoleVerification = settingGoogleSearchConsoleVerification
+            appWebserverUrl = settingWebServerUrl
           }
   let defMiddles = defaultMiddlewaresNoLogging
   let extraMiddles =

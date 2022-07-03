@@ -52,18 +52,6 @@ in
                 default = null;
                 example = "https://smos.online";
               };
-              google-analytics-tracking = mkOption {
-                description = "The Google analytics tracking code";
-                type = types.nullOr types.str;
-                example = "XX-XXXXXXXX-XX";
-                default = null;
-              };
-              google-search-console-verification = mkOption {
-                description = "The Google search console verification code";
-                type = types.nullOr types.str;
-                example = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                default = null;
-              };
               pkg = mkOption {
                 description = "The docs site package";
                 type = types.package;
@@ -202,18 +190,6 @@ in
                 type = types.int;
                 example = 8002;
               };
-              google-analytics-tracking = mkOption {
-                description = "The Google analytics tracking code";
-                type = types.nullOr types.str;
-                default = null;
-                example = "XX-XXXXXXXX-XX";
-              };
-              google-search-console-verification = mkOption {
-                description = "The Google search console verification code";
-                type = types.nullOr types.str;
-                default = null;
-                example = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-              };
               pkg = mkOption {
                 description = "The web server package";
                 type = types.package;
@@ -232,8 +208,6 @@ in
         (attrOrNull "port" port)
         (attrOrNull "api-url" api-url)
         (attrOrNull "web-url" (if builtins.isNull web-url then head hosts else web-url))
-        (attrOrNull "google-analytics-tracking" google-analytics-tracking)
-        (attrOrNull "google-search-console-verification" google-search-console-verification)
         cfg.docs-site.config
       ];
       docsSiteConfigFile = (pkgs.formats.yaml { }).generate "smos-docs-site-config.yaml" docs-site-config;
@@ -393,8 +367,6 @@ in
         (attrOrNull "web-url" web-url)
         (attrOrNull "log-level" log-level)
         (attrOrNull "port" port)
-        (attrOrNull "google-analytics-tracking" google-analytics-tracking)
-        (attrOrNull "google-search-console-verification" google-search-console-verification)
         (attrOrNull "data-dir" web-server-data-dir)
         cfg.web-server.config
       ];

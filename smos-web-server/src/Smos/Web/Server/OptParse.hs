@@ -47,8 +47,6 @@ combineToSettings Flags {..} Environment {..} mConf = do
   settingDataDir <- case flagDataDir <|> envDataDir <|> mc confDataDir of
     Nothing -> getCurrentDir
     Just dd -> resolveDir' dd
-  let settingGoogleAnalyticsTracking = T.pack <$> (flagGoogleAnalyticsTracking <|> envGoogleAnalyticsTracking <|> mc confGoogleAnalyticsTracking)
-  let settingGoogleSearchConsoleVerification = T.pack <$> (flagGoogleSearchConsoleVerification <|> envGoogleSearchConsoleVerification <|> mc confGoogleSearchConsoleVerification)
   pure Settings {..}
 
 getEnvironment :: IO Environment
@@ -70,8 +68,6 @@ environmentParser =
     <*> optional (Env.var Env.str "API_URL" (Env.help "The url for the api to use"))
     <*> optional (Env.var Env.str "WEB_URL" (Env.help "The url that this web server is served from"))
     <*> optional (Env.var Env.str "DATA_DIR" (Env.help "The directory to store workflows during editing"))
-    <*> optional (Env.var Env.str "GOOGLE_ANALYTICS_TRACKING" (Env.help "The Google analytics tracking code"))
-    <*> optional (Env.var Env.str "GOOGLE_SEARCH_CONSOLE_VERIFICATION" (Env.help "The Google search console verification code"))
 
 getConfiguration :: Flags -> Environment -> IO (Maybe Configuration)
 getConfiguration Flags {..} Environment {..} =
@@ -178,24 +174,6 @@ parseArgs =
                 [ long "data-dir",
                   metavar "FILEPATH",
                   help "The directory to store workflows during editing"
-                ]
-            )
-        )
-      <*> optional
-        ( strOption
-            ( mconcat
-                [ long "google-analytics-tracking",
-                  metavar "CODE",
-                  help "The Google analytics tracking code"
-                ]
-            )
-        )
-      <*> optional
-        ( strOption
-            ( mconcat
-                [ long "google-search-console-verification",
-                  metavar "CODE",
-                  help "The Google search console verification code"
                 ]
             )
         )

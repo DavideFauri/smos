@@ -18,9 +18,7 @@ data Flags = Flags
     flagDocsUrl :: !(Maybe String),
     flagAPIUrl :: !(Maybe String),
     flagWebUrl :: !(Maybe String),
-    flagDataDir :: !(Maybe FilePath),
-    flagGoogleAnalyticsTracking :: !(Maybe String),
-    flagGoogleSearchConsoleVerification :: !(Maybe String)
+    flagDataDir :: !(Maybe FilePath)
   }
   deriving (Show, Eq)
 
@@ -31,9 +29,7 @@ data Environment = Environment
     envDocsUrl :: !(Maybe String),
     envAPIUrl :: !(Maybe String),
     envWebUrl :: !(Maybe String),
-    envDataDir :: !(Maybe FilePath),
-    envGoogleAnalyticsTracking :: !(Maybe String),
-    envGoogleSearchConsoleVerification :: !(Maybe String)
+    envDataDir :: !(Maybe FilePath)
   }
   deriving (Show, Eq, Generic)
 
@@ -43,9 +39,7 @@ data Configuration = Configuration
     confDocsUrl :: !(Maybe String),
     confAPIUrl :: !(Maybe String),
     confWebUrl :: !(Maybe String),
-    confDataDir :: !(Maybe FilePath),
-    confGoogleAnalyticsTracking :: !(Maybe String),
-    confGoogleSearchConsoleVerification :: !(Maybe String)
+    confDataDir :: !(Maybe FilePath)
   }
   deriving (Show, Eq, Generic)
 
@@ -59,8 +53,6 @@ instance HasCodec Configuration where
         <*> optionalFieldOrNull "api-url" "The url for the api to use" .= confAPIUrl
         <*> optionalFieldOrNull "web-url" "The url that this web server is served from" .= confWebUrl
         <*> optionalFieldOrNull "data-dir" "The directory to store workflows during editing" .= confDataDir
-        <*> optionalFieldOrNull "google-analytics-tracking" "The google analytics tracking code" .= confGoogleAnalyticsTracking
-        <*> optionalFieldOrNull "google-search-console-verification" "The google search console verification code" .= confGoogleSearchConsoleVerification
 
 data Settings = Settings
   { settingLogLevel :: !LogLevel,
@@ -68,9 +60,7 @@ data Settings = Settings
     settingDocsUrl :: !(Maybe BaseUrl),
     settingAPIUrl :: !BaseUrl,
     settingWebUrl :: !BaseUrl,
-    settingDataDir :: !(Path Abs Dir),
-    settingGoogleAnalyticsTracking :: !(Maybe Text),
-    settingGoogleSearchConsoleVerification :: !(Maybe Text)
+    settingDataDir :: !(Path Abs Dir)
   }
   deriving (Show, Eq, Generic)
 

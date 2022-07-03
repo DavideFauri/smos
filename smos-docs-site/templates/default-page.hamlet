@@ -10,19 +10,6 @@ $doctype 5
     $maybe description <- pageDescription pageContent
       <meta name="description" content="#{description}">
 
-    $maybe verification <- appGoogleSearchConsoleVerification app
-      <meta name="google-site-verification" content="#{verification}"/>
-
-    $maybe trackingId <- appGoogleAnalyticsTracking app
-      <!-- Global site tag (gtag.js) - Google Analytics -->
-      <script async src="https://www.googletagmanager.com/gtag/js?id=#{trackingId}">
-      <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-
-        gtag('config', '#{trackingId}');
-
   <body>
     ^{pageBody pageContent}
 

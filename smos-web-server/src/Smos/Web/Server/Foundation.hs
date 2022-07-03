@@ -52,9 +52,7 @@ data App = App
     appStyle :: !EmbeddedStatic,
     appLoginTokens :: !(TVar (Map Username (Token, Bool))),
     appHttpManager :: !Http.Manager,
-    appDataDir :: !(Path Abs Dir),
-    appGoogleAnalyticsTracking :: !(Maybe Text),
-    appGoogleSearchConsoleVerification :: !(Maybe Text)
+    appDataDir :: !(Path Abs Dir)
   }
 
 mkYesodData "App" $(parseRoutesFile "routes.txt")

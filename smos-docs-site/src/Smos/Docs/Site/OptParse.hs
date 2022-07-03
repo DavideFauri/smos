@@ -32,8 +32,6 @@ combineToSettings Flags {..} Environment {..} mConf = do
   let settingPort = fromMaybe 8080 $ flagPort <|> envPort <|> mc confPort
   let settingAPIServerUrl = T.pack <$> (flagAPIServerUrl <|> envAPIServerUrl <|> mc confAPIServerUrl)
   let settingWebServerUrl = T.pack <$> (flagWebServerUrl <|> envWebServerUrl <|> mc confWebServerUrl)
-  let settingGoogleAnalyticsTracking = T.pack <$> (flagGoogleAnalyticsTracking <|> envGoogleAnalyticsTracking <|> mc confGoogleAnalyticsTracking)
-  let settingGoogleSearchConsoleVerification = T.pack <$> (flagGoogleSearchConsoleVerification <|> envGoogleSearchConsoleVerification <|> mc confGoogleSearchConsoleVerification)
   pure Settings {..}
 
 getEnvironment :: IO Environment
@@ -52,8 +50,6 @@ environmentParser =
     <*> optional (Env.var Env.auto "PORT" (Env.help "The port to serve web requests on"))
     <*> optional (Env.var Env.str "API_URL" (Env.help "The url for the api server to refer to"))
     <*> optional (Env.var Env.str "WEB_URL" (Env.help "The url for the web server to refer to"))
-    <*> optional (Env.var Env.str "GOOGLE_ANALYTICS_TRACKING" (Env.help "The Google analytics tracking code"))
-    <*> optional (Env.var Env.str "GOOGLE_SEARCH_CONSOLE_VERIFICATION" (Env.help "The Google search console verification code"))
 
 getConfiguration :: Flags -> Environment -> IO (Maybe Configuration)
 getConfiguration Flags {..} Environment {..} =
@@ -119,24 +115,6 @@ parseFlags =
                 [ long "web-url",
                   metavar "URL",
                   help "The url to the web server to refer to"
-                ]
-            )
-        )
-      <*> optional
-        ( strOption
-            ( mconcat
-                [ long "google-analytics-tracking",
-                  metavar "CODE",
-                  help "The Google analytics tracking code"
-                ]
-            )
-        )
-      <*> optional
-        ( strOption
-            ( mconcat
-                [ long "google-search-console-verification",
-                  metavar "CODE",
-                  help "The Google search console verification code"
                 ]
             )
         )

@@ -48,9 +48,7 @@ webServerSetupFunc' cenv = do
         appDocsBaseUrl = Nothing,
         appLoginTokens = loginVar,
         appDataDir = tdir,
-        appHttpManager = manager cenv,
-        appGoogleAnalyticsTracking = Nothing,
-        appGoogleSearchConsoleVerification = Nothing
+        appHttpManager = manager cenv
       }
 
 loginTo :: Username -> Text -> YesodExample App ()
