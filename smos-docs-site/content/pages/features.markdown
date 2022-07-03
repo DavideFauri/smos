@@ -7,13 +7,6 @@ description: An overview of Smos' features
 
 Smos is a comprehensive system for implementing self-management as a power-user.
 
-<asciinema-player
-  src="/casts/basics.cast"
-  autoplay="true"
-  preloop="true"
-  loop="true">
-  </asciinema-player>
-
 ## Completely customisable
 
 Smos is first and foremost a library with which you can build your own version.

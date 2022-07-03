@@ -6,16 +6,13 @@ pkgs.haskell.lib.buildStackProject {
   name = "smos-nix-shell";
   buildInputs = with pkgs; [
     (import sources.niv { }).niv
-    asciinema
     autoconf
     bzip2
     feedback
     git
     haskellPackages.autoexporter
-    haskellPackages.autorecorder
     hub
     killall
-    sass
     xlibsWrapper
     xorg.libXScrnSaver
     xorg.libXrandr

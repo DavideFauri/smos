@@ -7,28 +7,6 @@ let
   isMacos = builtins.currentSystem == "x86_64-darwin";
 in
 {
-  smosCasts =
-    let
-      castsDir = ../smos-docs-site/content/casts;
-      castNames =
-        builtins.map (removeSuffix ".yaml")
-          (
-            builtins.attrNames
-              (
-                filterAttrs
-                  (p: v: v == "regular" && hasSuffix ".yaml" p)
-                  (builtins.readDir castsDir)
-              )
-          );
-      castDerivation = name: final.mkCastDerivationFunction { pkgs = final // final.smosReleasePackages; } {
-        inherit name;
-        src = ../smos-docs-site/content/casts + "/${name}.yaml";
-        default-rows = 30;
-        default-columns = 110;
-        # debug = true;
-      };
-    in
-    genAttrs castNames castDerivation;
   smosPackages = with final.haskell.lib;
     let
       ownPkg = name: src:
@@ -94,21 +72,7 @@ in
 
       stylesheet = final.stdenv.mkDerivation {
         name = "site-stylesheet.css";
-        src = ../smos-web-style/style/mybulma.scss;
-        buildCommand = ''
-          # Dependency submodules are fetched manually here
-          # so that we don't have to fetch the submodules of smos
-          # when importing smos from derivation.
-          ln -s ${sources.bulma} bulma
-
-          # The file we want to compile
-          # We need to copy this so that the relative path within it resolves to here instead of wherever we would link it from.
-          cp $src mybulma.scss
-          ${final.sass}/bin/scss \
-            --sourcemap=none \
-            mybulma.scss:index.css --style compressed
-          cp index.css $out
-        '';
+        src = ../smos-web-style/style/mybulma.css;
       };
       smos-web-style = overrideCabal (smosPkg "smos-web-style") (old: {
         preConfigure = ''
@@ -134,15 +98,7 @@ in
               url = "https://cs-syd.eu/logo/res/favicon.ico";
               sha256 = "sha256:0ahvcky6lrcpk2vd41558bjgh3x80mpkz4cl7smka534ypm5arz9";
             };
-            "static/asciinema-player.js" = builtins.fetchurl {
-              url = "https://github.com/asciinema/asciinema-player/releases/download/v2.6.1/asciinema-player.js";
-              sha256 = "sha256:092y2zl51z23jrl6mcqfxb64xaf9f2dx0j8kp69hp07m0935cz2p";
-            };
-            "static/asciinema-player.css" = builtins.fetchurl {
-              url = "https://github.com/asciinema/asciinema-player/releases/download/v2.6.1/asciinema-player.css";
-              sha256 = "sha256:1yi45fdps5mjqdwjhqwwzvlwxb4j7fb8451z7s6sdqmi7py8dksj";
-            };
-          } // mapAttrs' (name: value: nameValuePair "content/casts/${name}.cast" value) final.smosCasts
+          }
         )
       );
       smos-web-server = withStaticResources (smosPkgWithOwnComp "smos-web-server") ({
@@ -170,15 +126,7 @@ in
           url = "https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.4.0/lib/xterm-addon-fit.min.js";
           sha256 = "sha256:1mpw2a2x96b26xfymz6prk4z41k45x9idfc7li48vam08d7x8rfn";
         };
-        "static/asciinema-player.js" = builtins.fetchurl {
-          url = "https://github.com/asciinema/asciinema-player/releases/download/v2.6.1/asciinema-player.js";
-          sha256 = "sha256:092y2zl51z23jrl6mcqfxb64xaf9f2dx0j8kp69hp07m0935cz2p";
-        };
-        "static/asciinema-player.css" = builtins.fetchurl {
-          url = "https://github.com/asciinema/asciinema-player/releases/download/v2.6.1/asciinema-player.css";
-          sha256 = "sha256:1yi45fdps5mjqdwjhqwwzvlwxb4j7fb8451z7s6sdqmi7py8dksj";
-        };
-      } // mapAttrs' (name: value: nameValuePair "casts/${name}.cast" value) final.smosCasts);
+      }
       smos = overrideCabal (smosPkgWithOwnComp "smos") (
         old: {
           postBuild = ''

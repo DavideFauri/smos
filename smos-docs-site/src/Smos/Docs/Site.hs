@@ -19,7 +19,6 @@ smosDocsSite = do
   let app =
         App
           { appAssets = assets,
-            appCasts = casts,
             appStyle = smosWebStyle,
             appWebserverUrl = settingWebServerUrl,
             appGoogleAnalyticsTracking = settingGoogleAnalyticsTracking,

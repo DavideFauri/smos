@@ -10,7 +10,4 @@ getHomeR :: Handler Html
 getHomeR = do
   mDocsUrl <- getsYesod appDocsBaseUrl
   withNavBar $ do
-    addScript $ StaticR asciinema_player_js
-    addStylesheet $ StaticR asciinema_player_css
-
     $(widgetFile "home")

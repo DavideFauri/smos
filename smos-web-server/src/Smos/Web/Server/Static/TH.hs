@@ -12,12 +12,6 @@ import Yesod.EmbeddedStatic.Remote
 mkStatic :: Q [Dec]
 mkStatic = do
   let remoteStatic fp = embedRemoteFileAt fp ("static/" ++ fp)
-  cd <- resolveDir' "casts"
-  cde <- doesDirExist cd
-  let castsDir =
-        if cde
-          then "casts"
-          else "../smos-docs-site/content/casts"
 
   mkEmbeddedStatic
     development
@@ -28,8 +22,5 @@ mkStatic = do
       remoteStatic "xterm.css" "https://cdn.jsdelivr.net/npm/xterm@4.8.1/css/xterm.css",
       remoteStatic "xterm-attach.js" "https://cdn.jsdelivr.net/npm/xterm-addon-attach@0.6.0/lib/xterm-addon-attach.min.js",
       remoteStatic "xterm-fit.js" "https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.4.0/lib/xterm-addon-fit.min.js",
-      remoteStatic "asciinema-player.js" "https://github.com/asciinema/asciinema-player/releases/download/v2.6.1/asciinema-player.js",
-      remoteStatic "asciinema-player.css" "https://github.com/asciinema/asciinema-player/releases/download/v2.6.1/asciinema-player.css",
-      embedDir "assets",
-      embedDirAt "casts" castsDir
+      embedDir "assets"
     ]

@@ -11,18 +11,6 @@
         "url": "https://github.com/NorfairKing/autodocodec/archive/98135d2b24c4c52f56f53c6650a169aeec61c7f1.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
-    "autorecorder": {
-        "branch": "master",
-        "description": "An automatic declarative ASCIInema recorder",
-        "homepage": null,
-        "owner": "NorfairKing",
-        "repo": "autorecorder",
-        "rev": "557cc2b6c8e9daa2dc5468a9bae6309216712e5d",
-        "sha256": "1nbj03b126l1dcy1djqi6sw3c61hsvxswz8lw3337xsgknhaikkk",
-        "type": "tarball",
-        "url": "https://github.com/NorfairKing/autorecorder/archive/557cc2b6c8e9daa2dc5468a9bae6309216712e5d.tar.gz",
-        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
-    },
     "bulma": {
         "branch": "master",
         "description": "Modern CSS framework based on Flexbox",

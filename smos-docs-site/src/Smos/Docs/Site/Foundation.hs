@@ -13,7 +13,6 @@
 module Smos.Docs.Site.Foundation
   ( module Smos.Docs.Site.Foundation,
     module Smos.Docs.Site.Assets,
-    module Smos.Docs.Site.Casts,
     module Smos.Docs.Site.Static,
     module Smos.Docs.Site.Changelog,
     module Smos.Docs.Site.Widget,
@@ -32,7 +31,6 @@ import qualified Data.Text as T
 import Data.Time
 import Language.Haskell.TH.Load
 import Smos.Docs.Site.Assets
-import Smos.Docs.Site.Casts
 import Smos.Docs.Site.Changelog
 import Smos.Docs.Site.Constants
 import Smos.Docs.Site.Static
@@ -46,10 +44,7 @@ import Yesod.EmbeddedStatic
 data App = App
   { appWebserverUrl :: !(Maybe Text),
     appAssets :: !EmbeddedStatic,
-    appCasts :: !EmbeddedStatic,
-    appStyle :: !EmbeddedStatic,
-    appGoogleAnalyticsTracking :: !(Maybe Text),
-    appGoogleSearchConsoleVerification :: !(Maybe Text)
+    appStyle :: !EmbeddedStatic
   }
 
 mkYesodData "App" $(parseRoutesFile "routes")
@@ -64,8 +59,6 @@ instance Yesod App where
         addStylesheet $ AssetsStaticR font_awesome_css
         toWidgetHead
           [hamlet|<link rel="icon" href=@{AssetsR ["logo.svg"]} sizes="16x16 32x32 48x48 64x84" type="image/x-icon">|]
-        addScript $ AssetsStaticR asciinema_player_js
-        addStylesheet $ AssetsStaticR asciinema_player_css
         let menu = $(widgetFile "menu")
         addReloadWidget $(widgetFile "default-body")
     withUrlRenderer $(hamletFile "templates/default-page.hamlet")
@@ -85,11 +78,6 @@ getHomeR = defaultLayout $ do
   setDescriptionIdemp "Documentation for the Smos Self-Management Tool"
   mWebUrl <- getsYesod appWebserverUrl
   $(widgetFile "home")
-
-getCastsR :: [Text] -> Handler Html
-getCastsR t = do
-  neverExpires
-  redirect $ T.intercalate "/" $ "/casts-static/res" : t
 
 getAssetsR :: [Text] -> Handler Html
 getAssetsR t = do

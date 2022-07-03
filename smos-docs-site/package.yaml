@@ -8,7 +8,6 @@ maintainer: syd@cs-syd.eu
 extra-source-files:
 - routes
 - content/assets/**/*
-- content/casts/**/*.yaml
 - content/changelogs/**/*
 - content/pages/**/*
 - content/unreleased.markdown

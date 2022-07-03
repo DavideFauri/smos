@@ -18,15 +18,6 @@ extra-source-files:
     content/assets/smos-cheat-sheet.jpeg
     content/assets/smos-cheat-sheet.pdf
     content/assets/smos.png
-    content/casts/agenda.yaml
-    content/casts/archive.yaml
-    content/casts/basics.yaml
-    content/casts/browser.yaml
-    content/casts/calendar-import.yaml
-    content/casts/example.yaml
-    content/casts/next.yaml
-    content/casts/waiting.yaml
-    content/casts/work.yaml
     content/changelogs/2020-09-25.markdown
     content/changelogs/2020-11-04.markdown
     content/changelogs/2020-12-16.markdown
@@ -129,7 +120,6 @@ extra-source-files:
     templates/option-docs.hamlet
     templates/page.hamlet
     templates/smos-actions.hamlet
-    templates/smos-asciinema/spec.hamlet
     templates/smos-file.hamlet
     templates/smos-keybindings.hamlet
     templates/smos-query/column.hamlet
@@ -146,8 +136,6 @@ library
       Smos.Docs.Site
       Smos.Docs.Site.Application
       Smos.Docs.Site.Assets
-      Smos.Docs.Site.Casts
-      Smos.Docs.Site.Casts.TH
       Smos.Docs.Site.Changelog
       Smos.Docs.Site.Changelog.TH
       Smos.Docs.Site.Constants
