@@ -23,7 +23,6 @@ extra-source-files:
     templates/default-page.hamlet
     templates/footer.hamlet
     templates/home.hamlet
-    templates/home.julius
     templates/home.lucius
     templates/navbar.hamlet
     templates/navbar.julius

@@ -35,30 +35,6 @@
         "url": "https://github.com/jgthms/bulma/archive/514229c985e0146039d6960a220f317876c39f8d.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
-    "bulma-carousel": {
-        "branch": "master",
-        "description": "Display a carousel",
-        "homepage": null,
-        "owner": "Wikiki",
-        "repo": "bulma-carousel",
-        "rev": "71e38451f429af74aa8dd6c0d69ce9dd626f87f6",
-        "sha256": "13s7dahp1xb848n84s7hxj7s1ppkpmxlqj5x407k7s5yzprja0bx",
-        "type": "tarball",
-        "url": "https://github.com/Wikiki/bulma-carousel/archive/71e38451f429af74aa8dd6c0d69ce9dd626f87f6.tar.gz",
-        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
-    },
-    "bulma-pricingtable": {
-        "branch": "master",
-        "description": "Display a pricing table with Bulma",
-        "homepage": null,
-        "owner": "Wikiki",
-        "repo": "bulma-pricingtable",
-        "rev": "25ef9a4e97afd2da9bd92d3e1c83fbd0caf91102",
-        "sha256": "1p0ikarnjfjamyrwjx7sz67aqwld22mf2gwgcxpbvdhpf414kiik",
-        "type": "tarball",
-        "url": "https://github.com/Wikiki/bulma-pricingtable/archive/25ef9a4e97afd2da9bd92d3e1c83fbd0caf91102.tar.gz",
-        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
-    },
     "cursor": {
         "branch": "master",
         "description": "Cursor data and manipulation",

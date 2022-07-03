@@ -8,10 +8,6 @@
   margin-top: auto;
 }
 
-.carousel {
-  overflow: hidden;
-}
-
 *:focus {
   outline: none;
 }

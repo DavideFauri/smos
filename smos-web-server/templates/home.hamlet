@@ -45,48 +45,6 @@
               Self-management
 
 
-
-    <section .section>
-      <div .container>
-        <div id="carousel-smos-testimonials" .carousel .no-select>
-          <div .item-1 .columns .is-centered>
-            <div .column .is-half>
-              <p .content .is-size-5 .has-text-centered>
-                "Smos has really made me realise how much work used to be on my mind before my self-management times.
-                I now get a lot more done with a lot less stress.
-                It is actually incredible."
-
-              <p .has-text-weight-semibold .has-text-centered>
-                Hendrik Steurs,
-
-              <p .has-text-weight-semibold .is-italic .has-text-centered>
-                Private Consultant
-
-          <div .item-2 .columns .is-centered>
-            <div .column .is-half>
-              <p .content .is-size-5 .has-text-centered>
-                "The most signicificant outcome from this has been the decrease of perceived stress."
-
-              <p .has-text-weight-semibold .has-text-centered>
-                Samuli Kortelainen,
-
-              <p .has-text-weight-semibold .is-italic .has-text-centered>
-                CEO
-
-          <div .item-3 .columns .is-centered>
-            <div .column .is-half>
-              <p .content .is-size-5 .has-text-centered>
-                "I believe it has the potential to prevent costly mistakes via reduced stress, missed work-items via tracking and to make team members more productive.
-                Trained team members will be more dependable and less likely to burn out."
-
-              <p .has-text-weight-semibold .has-text-centered>
-                Aniket Deshpande,
-
-              <p .has-text-weight-semibold .is-italic .has-text-centered>
-                Software Engineer
-
-
-
     <section .section>
       <div .columns .is-vcentered>
         <div .column .has-text-centered>

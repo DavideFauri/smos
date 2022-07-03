@@ -100,9 +100,7 @@ in
           # so that we don't have to fetch the submodules of smos
           # when importing smos from derivation.
           ln -s ${sources.bulma} bulma
-          ln -s ${sources.bulma-carousel} bulma-carousel
-          ln -s ${sources.bulma-pricingtable} bulma-pricingtable
-    
+
           # The file we want to compile
           # We need to copy this so that the relative path within it resolves to here instead of wherever we would link it from.
           cp $src mybulma.scss
@@ -179,10 +177,6 @@ in
         "static/asciinema-player.css" = builtins.fetchurl {
           url = "https://github.com/asciinema/asciinema-player/releases/download/v2.6.1/asciinema-player.css";
           sha256 = "sha256:1yi45fdps5mjqdwjhqwwzvlwxb4j7fb8451z7s6sdqmi7py8dksj";
-        };
-        "static/bulma-carousel.js" = builtins.fetchurl {
-          url = "https://cdn.jsdelivr.net/npm/bulma-carousel@4.0.3/dist/js/bulma-carousel.min.js";
-          sha256 = "sha256:0cm7wj49qmbi9kp5hs3wc6vcr1h0d5h864pa5bc401nm5kppp958";
         };
       } // mapAttrs' (name: value: nameValuePair "casts/${name}.cast" value) final.smosCasts);
       smos = overrideCabal (smosPkgWithOwnComp "smos") (
