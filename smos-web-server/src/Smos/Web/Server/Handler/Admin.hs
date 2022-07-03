@@ -6,7 +6,6 @@ module Smos.Web.Server.Handler.Admin
   ( getAdminPanelR,
     postAdminMigrateFilesR,
     getAdminUserR,
-    postAdminUserSetSubscriptionR,
   )
 where
 
@@ -30,9 +29,3 @@ getAdminUserR username = withAdminLogin $ \t -> do
   now <- liftIO getCurrentTime
   token <- genToken
   withNavBar $(widgetFile "admin/user")
-
-postAdminUserSetSubscriptionR :: Username -> Handler Html
-postAdminUserSetSubscriptionR username = withAdminLogin $ \t -> do
-  endDate <- runInputPost $ ireq dayField "end-date"
-  NoContent <- runClientOrErr $ clientPutUserSubscription t username $ UTCTime endDate 0
-  redirect $ AdminUserR username

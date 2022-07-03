@@ -22,7 +22,6 @@ import Servant.Auth.Server
 import Smos.API
 import Smos.Server.DB
 import Smos.Server.OptParse.Types
-import StripeClient as Stripe
 
 type ServerHandler = ReaderT ServerEnv (LoggingT Handler)
 
@@ -35,9 +34,7 @@ data ServerEnv = ServerEnv
     serverEnvCompressionLevel :: !Int, -- Between 1 and Codec.Compression.Zstd.maxCLevel
     serverEnvLogFunc :: !(Loc -> LogSource -> LogLevel -> LogStr -> IO ()),
     serverEnvMaxBackupSizePerUser :: !(Maybe Word64),
-    serverEnvAdmin :: !(Maybe Username),
-    serverEnvPriceCache :: !(MVar Stripe.Price), -- Indefinite cache, so an MVar works.
-    serverEnvMonetisationSettings :: !(Maybe MonetisationSettings)
+    serverEnvAdmin :: !(Maybe Username)
   }
   deriving (Generic)
 

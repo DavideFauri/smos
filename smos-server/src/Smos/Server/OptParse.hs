@@ -74,20 +74,7 @@ combineToSettings Flags {..} Environment {..} mc = do
           envFileMigrationLooperEnv
           (mc >>= confFileMigrationLooperConfiguration)
   let settingAdmin = flagAdmin <|> envAdmin <|> (mc >>= confAdmin)
-  let settingMonetisationSettings =
-        combineToMonetisationSettings
-          flagMonetisationFlags
-          envMonetisationEnv
-          (mc >>= confMonetisationConf)
   pure Settings {..}
-
-combineToMonetisationSettings :: MonetisationFlags -> MonetisationEnvironment -> Maybe MonetisationConfiguration -> Maybe MonetisationSettings
-combineToMonetisationSettings MonetisationFlags {..} MonetisationEnvironment {..} mc =
-  MonetisationSettings
-    <$> (monetisationFlagStripeSecretKey <|> monetisationEnvStripeSecretKey <|> (mc >>= monetisationConfStripeSecretKey))
-    <*> (monetisationFlagStripePublishableKey <|> monetisationEnvStripePublishableKey <|> (mc >>= monetisationConfStripePublishableKey))
-    <*> (monetisationFlagStripePrice <|> monetisationEnvStripePrice <|> (mc >>= monetisationConfStripePrice))
-    <*> pure (S.unions [monetisationFlagFreeloaders, monetisationEnvFreeloaders, maybe S.empty monetisationConfFreeloaders mc])
 
 getEnvironment :: IO Environment
 getEnvironment = Env.parse (Env.header "Enviromnent") environmentParser
@@ -107,23 +94,6 @@ environmentParser =
       <*> looperEnvironmentParser "BACKUP_GARBAGE_COLLECTOR"
       <*> looperEnvironmentParser "FILE_MIGRATOR"
       <*> optional (Env.var (left Env.UnreadError . parseUsernameWithError . T.pack) "ADMIN" (Env.help "The user that will have admin rights"))
-      <*> monetisationEnvironmentParser
-
-monetisationEnvironmentParser :: Env.Parser Env.Error MonetisationEnvironment
-monetisationEnvironmentParser =
-  MonetisationEnvironment
-    <$> optional (Env.var Env.str "STRIPE_SECRET_KEY" (Env.help "The stripe api secret key"))
-    <*> optional (Env.var Env.str "STRIPE_PUBLISHABLE_KEY" (Env.help "The stripe api publishable key"))
-    <*> optional (Env.var Env.str "STRIPE_PRICE" (Env.help "The stripe price id"))
-    <*> Env.var
-      ( left Env.UnreadError
-          . fmap S.fromList
-          . mapM (parseUsernameWithError . T.strip)
-          . T.splitOn ","
-          . T.pack
-      )
-      "FREELOADERS"
-      (Env.def S.empty <> Env.help "The usernames of users that will not have to pay, comma separated")
 
 getConfiguration :: Flags -> Environment -> IO (Maybe Configuration)
 getConfiguration Flags {..} Environment {..} =
@@ -246,47 +216,3 @@ parseFlags =
               ]
           )
       )
-    <*> parseMonetisationFlags
-
-parseMonetisationFlags :: Parser MonetisationFlags
-parseMonetisationFlags =
-  MonetisationFlags
-    <$> optional
-      ( strOption
-          ( mconcat
-              [ long "stripe-secret-key",
-                metavar "SECRET_KEY",
-                help "The stripe api secret key"
-              ]
-          )
-      )
-    <*> optional
-      ( strOption
-          ( mconcat
-              [ long "stripe-publishable-key",
-                metavar "PUBLISHABLE_KEY",
-                help "The stripe api publishable key"
-              ]
-          )
-      )
-    <*> optional
-      ( strOption
-          ( mconcat
-              [ long "stripe-price",
-                metavar "PRICE_ID",
-                help "The stripe price id"
-              ]
-          )
-      )
-    <*> ( S.fromList
-            <$> many
-              ( option
-                  (eitherReader $ parseUsernameWithError . T.pack)
-                  ( mconcat
-                      [ long "freeloader",
-                        metavar "USERNAME",
-                        help "The username of a user that will not have to pay"
-                      ]
-                  )
-              )
-        )

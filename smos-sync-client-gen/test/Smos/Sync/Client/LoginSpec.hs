@@ -32,7 +32,6 @@ spec = managerSpec $
 
             let serverSetupFuncWithJWTKey :: JOSE.JWK -> SetupFunc ClientEnv
                 serverSetupFuncWithJWTKey key = do
-                  priceVar <- liftIO newEmptyMVar
                   let env =
                         ServerEnv
                           { serverEnvServerUUID = uuid,
@@ -43,9 +42,7 @@ spec = managerSpec $
                             serverEnvCompressionLevel = 1, -- The lowest
                             serverEnvLogFunc = \_ _ _ _ -> pure (),
                             serverEnvMaxBackupSizePerUser = Nothing,
-                            serverEnvAdmin = Nothing,
-                            serverEnvPriceCache = priceVar,
-                            serverEnvMonetisationSettings = Nothing
+                            serverEnvAdmin = Nothing
                           }
                   let application = Server.makeSyncApp env
                   p <- applicationSetupFunc application

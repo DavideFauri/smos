@@ -58,9 +58,6 @@ smosUnprotectedClient = fromServant $ unprotectedRoutes smosClient
 clientGetApiVersion :: ClientM Version
 clientGetApiVersion = getApiVersion smosUnprotectedClient
 
-clientGetMonetisation :: ClientM (Maybe Monetisation)
-clientGetMonetisation = getMonetisation smosUnprotectedClient
-
 clientPostRegister :: Register -> ClientM NoContent
 clientPostRegister = postRegister smosUnprotectedClient
 
@@ -164,12 +161,6 @@ smosProtectedClient = fromServant $ protectedRoutes smosClient
 clientGetUserPermissions :: Token -> ClientM UserPermissions
 clientGetUserPermissions = getUserPermissions smosProtectedClient
 
-clientGetUserSubscription :: Token -> ClientM SubscriptionStatus
-clientGetUserSubscription = getUserSubscription smosProtectedClient
-
-clientPostInitiateStripeCheckoutSession :: Token -> InitiateStripeCheckoutSession -> ClientM InitiatedCheckoutSession
-clientPostInitiateStripeCheckoutSession = postInitiateStripeCheckoutSession smosProtectedClient
-
 clientDeleteUser :: Token -> ClientM NoContent
 clientDeleteUser = deleteUser smosProtectedClient
 
@@ -220,9 +211,6 @@ clientGetUsers = getUsers smosAdminClient
 
 clientGetUser :: Token -> Username -> ClientM UserInfo
 clientGetUser = getUser smosAdminClient
-
-clientPutUserSubscription :: Token -> Username -> UTCTime -> ClientM NoContent
-clientPutUserSubscription = putUserSubscription smosAdminClient
 
 clientLogin :: Login -> ClientM (Either HeaderProblem Token)
 clientLogin = fmap (fmap sessionToToken) . clientLoginSession

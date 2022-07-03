@@ -108,7 +108,6 @@ serverEnvSetupFunc pool = liftIO $ do
   --
   -- logFunc <- runStderrLoggingT askLoggerIO
   let logFunc = evaluatingLog -- Evaluate the log lines, but dont print them.
-  priceVar <- newEmptyMVar
   pure $
     ServerEnv
       { serverEnvServerUUID = uuid,
@@ -119,9 +118,7 @@ serverEnvSetupFunc pool = liftIO $ do
         serverEnvCompressionLevel = 1, -- The lowest (fastest)
         serverEnvLogFunc = logFunc,
         serverEnvMaxBackupSizePerUser = Nothing,
-        serverEnvAdmin = Just testAdminUsername,
-        serverEnvPriceCache = priceVar,
-        serverEnvMonetisationSettings = Nothing
+        serverEnvAdmin = Just testAdminUsername
       }
 
 evaluatingLog :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()

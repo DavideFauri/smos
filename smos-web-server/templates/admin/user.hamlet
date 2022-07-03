@@ -14,7 +14,7 @@
         (#{prettyTimeAuto now $ userInfoCreated user})
 
       <p>
-        Last login: 
+        Last login:
 
         $maybe lastLogin <- userInfoLastLogin user
           #{formatTime defaultTimeLocale "%F" lastLogin}
@@ -23,37 +23,10 @@
           Never
 
       <p>
-        Last use: 
+        Last use:
 
         $maybe lastUse <- userInfoLastUse user
           #{formatTime defaultTimeLocale "%F" lastUse}
           (#{prettyTimeAuto now lastUse})
         $nothing
           Never
-
-      <p>
-        $case userInfoSubscribed user
-          $of SubscribedUntil end
-            Subscribed until #{formatTime defaultTimeLocale "%F" end} (#{prettyTimeAuto now end})
-          $of NoSubscriptionNecessary
-            No subscription necessary
-          $of NotSubscribed
-            Not subscribed
-
-      <h4 .title .is-4>
-        Override Subscription
-
-      <form .form
-        method=post
-        action=@{AdminUserSetSubscriptionR username}>
-        ^{token}
-        <div .field>
-          <label .label>
-            End date
-          <div .control>
-            <input required type="date" name="end-date">
-        <div .field>
-          <div .control>
-          <button .button .is-danger
-            type=submit>
-            Override

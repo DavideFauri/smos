@@ -11,10 +11,9 @@ import Data.Foldable
 import qualified Data.Map as M
 import Smos.Server.Backup
 import Smos.Server.Handler.Import
-import Smos.Server.Subscription
 
 servePostBackup :: AuthNCookie -> ServerHandler BackupUUID
-servePostBackup ac = withUserId ac $ \uid -> withSubscription ac $ do
+servePostBackup ac = withUserId ac $ \uid ->  do
   maxBackupSize <- asks serverEnvMaxBackupSizePerUser
   sumOfBackupsThatWeAlreadyHave <- runDB $ foldl' (+) 0 . map (backupSize . entityVal) <$> selectList [BackupUser ==. uid] []
 

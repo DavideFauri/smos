@@ -27,12 +27,9 @@ packages:
 - smos-notify
 - smos-github
 
-- smos-stripe-client
-
 # These are duplicated in nix/overlay.
 ghc-options:
-  "$locals": -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Widentities -Wredundant-constraints -Wcpp-undef -O0 -Wunused-packages
-  smos-stripe-client: -w # Turn off warnings for the generated code.
+  "$locals": -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Widentities -Wredundant-constraints -Wcpp-undef
 
 extra-deps:
 # Calendar
@@ -52,12 +49,12 @@ extra-deps:
     - mergeful
     - mergeful-persistent
     - genvalidity-mergeful
-  
+
 - github: NorfairKing/looper
   commit: fd36d37becfa04fa4d7e00604e37c61817b6b62b
   subdirs:
     - looper
-  
+
 - github: NorfairKing/pretty-relative-time
   commit: a634358ff274380a12360f7814c3aea46ea35b1b
 
@@ -66,7 +63,7 @@ extra-deps:
   subdirs:
     - cursor-fuzzy-time
     - cursor-fuzzy-time-gen
-  
+
 - github: NorfairKing/fuzzy-time
   commit: ec1bdbcf23ca0f2b9b71bd85437a2b307af5e43f
   subdirs:
@@ -170,7 +167,7 @@ extra-deps:
 
 
 
- 
+
 - github: NorfairKing/yesod-static-remote
   commit: 7eda644dc369e16c3591847f6c7cad30846bf6b0
 

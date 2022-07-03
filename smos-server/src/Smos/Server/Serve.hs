@@ -57,7 +57,6 @@ runSmosServer Settings {..} = do
                 liftIO $ do
                   uuid <- readServerUUID settingUUIDFile
                   jwtKey <- loadSigningKey settingSigningKeyFile
-                  priceVar <- newEmptyMVar
                   let env =
                         ServerEnv
                           { serverEnvServerUUID = uuid,
@@ -71,9 +70,7 @@ runSmosServer Settings {..} = do
                             serverEnvLogFunc = logFunc,
                             serverEnvCompressionLevel = compressionLevel,
                             serverEnvMaxBackupSizePerUser = settingMaxBackupSizePerUser,
-                            serverEnvAdmin = settingAdmin,
-                            serverEnvPriceCache = priceVar,
-                            serverEnvMonetisationSettings = settingMonetisationSettings
+                            serverEnvAdmin = settingAdmin
                           }
                   let middles =
                         if development
@@ -144,18 +141,14 @@ syncServerUnprotectedRoutes :: UnprotectedRoutes (AsServerT ServerHandler)
 syncServerUnprotectedRoutes =
   UnprotectedRoutes
     { getApiVersion = serveGetApiVersion,
-      getMonetisation = serveGetMonetisation,
       postRegister = servePostRegister,
-      postLogin = servePostLogin,
-      postStripeHook = servePostStripeHook
+      postLogin = servePostLogin
     }
 
 syncServerProtectedRoutes :: ProtectedRoutes (AsServerT ServerHandler)
 syncServerProtectedRoutes =
   ProtectedRoutes
     { getUserPermissions = withAuthResult serveGetUserPermissions,
-      getUserSubscription = withAuthResult serveGetUserSubscription,
-      postInitiateStripeCheckoutSession = withAuthResult servePostInitiateStripeCheckoutSession,
       deleteUser = withAuthResult serveDeleteUser,
       postSync = withAuthResult servePostSync,
       getListBackups = withAuthResult serveGetListBackups,
@@ -181,8 +174,7 @@ syncServerAdminRoutes =
   AdminRoutes
     { postMigrateFiles = withAuthResult servePostMigrateFiles,
       getUsers = withAuthResult serveGetUsers,
-      getUser = withAuthResult serveGetUser,
-      putUserSubscription = withAuthResult servePutUserSubscription
+      getUser = withAuthResult serveGetUser
     }
 
 readServerUUID :: Path Abs File -> IO ServerUUID

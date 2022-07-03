@@ -77,10 +77,8 @@ type SmosUnprotectedAPI = ToServantApi UnprotectedRoutes
 
 data UnprotectedRoutes route = UnprotectedRoutes
   { getApiVersion :: !(route :- GetAPIVersion),
-    getMonetisation :: !(route :- GetMonetisation),
     postRegister :: !(route :- PostRegister),
-    postLogin :: !(route :- PostLogin),
-    postStripeHook :: !(route :- PostStripeHook)
+    postLogin :: !(route :- PostLogin)
   }
   deriving (Generic)
 
@@ -109,8 +107,6 @@ type SmosProtectedAPI = ToServantApi ProtectedRoutes
 
 data ProtectedRoutes route = ProtectedRoutes
   { getUserPermissions :: !(route :- ProtectAPI :> GetUserPermissions),
-    getUserSubscription :: !(route :- ProtectAPI :> GetUserSubscription),
-    postInitiateStripeCheckoutSession :: !(route :- ProtectAPI :> PostInitiateStripeCheckoutSession),
     deleteUser :: !(route :- ProtectAPI :> DeleteUser),
     postSync :: !(route :- ProtectAPI :> PostSync),
     getListBackups :: !(route :- ProtectAPI :> GetListBackups),
@@ -126,28 +122,6 @@ data ProtectedRoutes route = ProtectedRoutes
   deriving (Generic)
 
 type GetAPIVersion = "api-version" :> Get '[JSON] Version
-
-type GetMonetisation = "monetisation" :> Get '[JSON] (Maybe Monetisation)
-
-data Monetisation = Monetisation
-  { monetisationStripePublishableKey :: !Text,
-    monetisationStripePriceCurrency :: !Text,
-    monetisationStripePricePerYear :: !Int
-  }
-  deriving stock (Show, Eq, Generic)
-  deriving (FromJSON, ToJSON) via (Autodocodec Monetisation)
-
-instance Validity Monetisation
-
-instance NFData Monetisation
-
-instance HasCodec Monetisation where
-  codec =
-    object "Monetisation" $
-      Monetisation
-        <$> requiredField "publishable-key" "Stripe publishable key" .= monetisationStripePublishableKey
-        <*> requiredField "currency" "currency of the price" .= monetisationStripePriceCurrency
-        <*> requiredField "price-per-year" "price per year, in minimal quantisations" .= monetisationStripePricePerYear
 
 -- We cannot use PostNoContent because of this issue:
 -- https://github.com/haskell-servant/servant-auth/issues/177
@@ -207,8 +181,6 @@ instance HasCodec Login where
           (requiredField "loginPassword" "legacy key")
           .= loginPassword
 
-type PostStripeHook = "stripe" :> ReqBody '[JSON] JSON.Value :> Verb 'POST 204 '[JSON] NoContent
-
 type GetUserPermissions = "user" :> "permissions" :> Get '[JSON] UserPermissions
 
 data UserPermissions = UserPermissions
@@ -226,89 +198,6 @@ instance HasCodec UserPermissions where
     object "UserPermissions" $
       UserPermissions
         <$> optionalFieldWithDefault "admin" False "whether the user is an admin" .= userPermissionsIsAdmin
-
-type GetUserSubscription = "user" :> "subscription" :> Get '[JSON] SubscriptionStatus
-
-data SubscriptionStatus
-  = NoSubscriptionNecessary
-  | SubscribedUntil UTCTime
-  | NotSubscribed
-  deriving stock (Show, Eq, Generic)
-  deriving (FromJSON, ToJSON) via (Autodocodec SubscriptionStatus)
-
-instance Validity SubscriptionStatus
-
-instance NFData SubscriptionStatus
-
-instance HasCodec SubscriptionStatus where
-  codec =
-    dimapCodec f g $
-      object "SubscriptionStatus" $
-        eitherCodec noSubscriptionNecessaryCodec $
-          eitherCodec subscribedUntilCodec notSubscribedCodec
-    where
-      f = \case
-        Left () -> NoSubscriptionNecessary
-        Right (Left u) -> SubscribedUntil u
-        Right (Right ()) -> NotSubscribed
-      g = \case
-        NoSubscriptionNecessary -> Left ()
-        SubscribedUntil u -> Right (Left u)
-        NotSubscribed -> Right (Right ())
-
-      noSubscriptionNecessaryCodec :: JSONObjectCodec ()
-      noSubscriptionNecessaryCodec =
-        dimapCodec (const ()) (const "") $
-          requiredFieldWith "status" (literalTextCodec "no-subscription-necessary") "status: no subscription necessary"
-      subscribedUntilCodec :: JSONObjectCodec UTCTime
-      subscribedUntilCodec =
-        dimapCodec snd (\u -> ("", u)) $
-          (,)
-            <$> requiredFieldWith "status" (literalTextCodec "subscribed") "status: subscribed" .= fst
-            <*> requiredField "until" "until when the subscription is active" .= snd
-
-      notSubscribedCodec :: JSONObjectCodec ()
-      notSubscribedCodec =
-        dimapCodec (const ()) (const "") $
-          requiredFieldWith "status" (literalTextCodec "not-subscribed") "status: not subscribed"
-
-type PostInitiateStripeCheckoutSession = "checkout" :> "stripe" :> "session" :> ReqBody '[JSON] InitiateStripeCheckoutSession :> Post '[JSON] InitiatedCheckoutSession
-
-data InitiateStripeCheckoutSession = InitiateStripeCheckoutSession
-  { initiateStripeCheckoutSessionSuccessUrl :: Text,
-    initiateStripeCheckoutSessionCanceledUrl :: Text
-  }
-  deriving stock (Show, Eq, Generic)
-  deriving (FromJSON, ToJSON) via (Autodocodec InitiateStripeCheckoutSession)
-
-instance Validity InitiateStripeCheckoutSession
-
-instance NFData InitiateStripeCheckoutSession
-
-instance HasCodec InitiateStripeCheckoutSession where
-  codec =
-    object "InitiateStripeCheckoutSession" $
-      InitiateStripeCheckoutSession
-        <$> requiredField "success" "success url" .= initiateStripeCheckoutSessionSuccessUrl
-        <*> requiredField "canceled" "canceled url" .= initiateStripeCheckoutSessionCanceledUrl
-
-data InitiatedCheckoutSession = InitiatedCheckoutSession
-  { initiatedCheckoutSessionId :: Text,
-    initiatedCheckoutSessionCustomerId :: Maybe Text
-  }
-  deriving stock (Show, Eq, Generic)
-  deriving (FromJSON, ToJSON) via (Autodocodec InitiatedCheckoutSession)
-
-instance Validity InitiatedCheckoutSession
-
-instance NFData InitiatedCheckoutSession
-
-instance HasCodec InitiatedCheckoutSession where
-  codec =
-    object "InitiatedCheckoutSession" $
-      InitiatedCheckoutSession
-        <$> requiredField "session" "session identifier" .= initiatedCheckoutSessionId
-        <*> optionalField "customer" "customer identifier" .= initiatedCheckoutSessionCustomerId
 
 type DeleteUser = "user" :> Verb 'DELETE 204 '[JSON] NoContent
 
@@ -458,8 +347,7 @@ newtype AdminCookie = AdminCookie {adminCookieUsername :: Username}
 data AdminRoutes route = AdminRoutes
   { postMigrateFiles :: !(route :- ProtectAPI :> PostMigrateFiles),
     getUsers :: !(route :- ProtectAdmin :> GetUsers),
-    getUser :: !(route :- ProtectAdmin :> GetUser),
-    putUserSubscription :: !(route :- ProtectAdmin :> PutUserSubscription)
+    getUser :: !(route :- ProtectAdmin :> GetUser)
   }
   deriving (Generic)
 
@@ -474,8 +362,7 @@ data UserInfo = UserInfo
     userInfoAdmin :: !Bool,
     userInfoCreated :: !UTCTime,
     userInfoLastLogin :: !(Maybe UTCTime),
-    userInfoLastUse :: !(Maybe UTCTime),
-    userInfoSubscribed :: !SubscriptionStatus
+    userInfoLastUse :: !(Maybe UTCTime)
   }
   deriving stock (Show, Eq, Generic)
   deriving (FromJSON, ToJSON) via (Autodocodec UserInfo)
@@ -493,6 +380,4 @@ instance HasCodec UserInfo where
         <*> requiredField "created" "user creation time" .= userInfoCreated
         <*> requiredField "last-login" "last time the user logged in" .= userInfoLastLogin
         <*> requiredField "last-use" "last time the user used the API" .= userInfoLastUse
-        <*> requiredField "subscribed" "user subscription status" .= userInfoSubscribed
 
-type PutUserSubscription = "users" :> Capture "username" Username :> ReqBody '[JSON] UTCTime :> Verb 'PUT 204 '[JSON] NoContent

@@ -5,13 +5,6 @@ final: previous:
 with final.lib;
 let
   isMacos = builtins.currentSystem == "x86_64-darwin";
-
-  generateOpenAPIClient = import (sources.openapi-code-generator + "/nix/generate-client.nix") { pkgs = final; };
-  generatedStripe = generateOpenAPIClient {
-    name = "smos-stripe-client";
-    configFile = ../stripe-client-gen.yaml;
-    src = sources.stripe-spec + "/openapi/spec3.yaml";
-  };
 in
 {
   smosCasts =
@@ -199,7 +192,7 @@ in
             # Set up mime the types
             mkdir -p $out/share/mime/packages
             ln -s ${../mime/smos.mime-type} $out/share/mime/packages/smos.xml
-                
+
             # Set up the .desktop files
             mkdir -p $out/share/applications
             ln -s ${../mime/smos.desktop} $out/share/applications/smos.desktop
@@ -231,7 +224,6 @@ in
       "smos-sync-client-gen" = smosPkg "smos-sync-client-gen";
       "smos-github" = smosPkgWithOwnComp "smos-github";
       "smos-notify" = smosPkgWithOwnComp "smos-notify";
-      "smos-stripe-client" = generatedStripe.package;
       inherit smos-web-style;
     } // optionalAttrs (!isMacos) {
       inherit smos-web-server;
@@ -294,8 +286,6 @@ in
     (final.nixosOptionsDoc {
       options = eval.options;
     }).optionsJSON;
-
-  generatedSmosStripeCode = generatedStripe.code;
 
   haskellPackages =
     previous.haskellPackages.override (

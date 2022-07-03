@@ -7,28 +7,6 @@
       <p>
         Username: #{usernameText un}
 
-    $maybe _ <- mMonetisation
-      <div .box .content>
-        <h4 .title .is-4>
-          Subscription
-
-        $case status
-          $of SubscribedUntil end
-            <p>
-              Your subscription ends on 
-              #{formatTime defaultTimeLocale "%F" end}
-              (#{prettyTimeAuto now end})
-
-          $of NoSubscriptionNecessary
-            No subscription necessary
-
-          $of NotSubscribed
-            <p>
-              Not subscribed
-
-            <a .button href=@{CheckoutR}>
-              Subscribe now
-
     <div .box .content>
       <h4 .title .is-4>
         Danger zone

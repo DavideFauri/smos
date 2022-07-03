@@ -29,16 +29,7 @@ data Flags = Flags
     flagAutoBackupLooperFlags :: !LooperFlags,
     flagBackupGarbageCollectionLooperFlags :: !LooperFlags,
     flagFileMigrationLooperFlags :: !LooperFlags,
-    flagAdmin :: !(Maybe Username),
-    flagMonetisationFlags :: !MonetisationFlags
-  }
-  deriving (Show, Eq, Generic)
-
-data MonetisationFlags = MonetisationFlags
-  { monetisationFlagStripeSecretKey :: !(Maybe Text),
-    monetisationFlagStripePublishableKey :: !(Maybe Text),
-    monetisationFlagStripePrice :: !(Maybe Text),
-    monetisationFlagFreeloaders :: !(Set Username)
+    flagAdmin :: !(Maybe Username)
   }
   deriving (Show, Eq, Generic)
 
@@ -53,16 +44,7 @@ data Environment = Environment
     envAutoBackupLooperEnv :: !LooperEnvironment,
     envBackupGarbageCollectionLooperEnv :: !LooperEnvironment,
     envFileMigrationLooperEnv :: !LooperEnvironment,
-    envAdmin :: !(Maybe Username),
-    envMonetisationEnv :: !MonetisationEnvironment
-  }
-  deriving (Show, Eq, Generic)
-
-data MonetisationEnvironment = MonetisationEnvironment
-  { monetisationEnvStripeSecretKey :: !(Maybe Text),
-    monetisationEnvStripePublishableKey :: !(Maybe Text),
-    monetisationEnvStripePrice :: !(Maybe Text),
-    monetisationEnvFreeloaders :: !(Set Username)
+    envAdmin :: !(Maybe Username)
   }
   deriving (Show, Eq, Generic)
 
@@ -77,8 +59,7 @@ data Configuration = Configuration
     confAutoBackupLooperConfiguration :: !(Maybe LooperConfiguration),
     confBackupGarbageCollectionLooperConfiguration :: !(Maybe LooperConfiguration),
     confFileMigrationLooperConfiguration :: !(Maybe LooperConfiguration),
-    confAdmin :: !(Maybe Username),
-    confMonetisationConf :: !(Maybe MonetisationConfiguration)
+    confAdmin :: !(Maybe Username)
   }
   deriving stock (Show, Eq, Generic)
 
@@ -139,27 +120,6 @@ configurationObjectCodec =
       "admin"
       "The username of the user who will have admin rights"
       .= confAdmin
-    <*> optionalFieldOrNull
-      "monetisation"
-      "Monetisation configuration. If this is not configured then the server is run entirely for free."
-      .= confMonetisationConf
-
-data MonetisationConfiguration = MonetisationConfiguration
-  { monetisationConfStripeSecretKey :: !(Maybe Text),
-    monetisationConfStripePublishableKey :: !(Maybe Text),
-    monetisationConfStripePrice :: !(Maybe Text),
-    monetisationConfFreeloaders :: !(Set Username)
-  }
-  deriving (Show, Eq, Generic)
-
-instance HasCodec MonetisationConfiguration where
-  codec =
-    object "MonetisationConfiguration" $
-      MonetisationConfiguration
-        <$> optionalFieldOrNull "stripe-secret-key" "The secret key for calling the stripe api" .= monetisationConfStripeSecretKey
-        <*> optionalFieldOrNull "stripe-publishable-key" "The publishable key for calling the stripe api" .= monetisationConfStripePublishableKey
-        <*> optionalFieldOrNull "stripe-price" "The stripe identifier of the stripe price used to checkout a subscription" .= monetisationConfStripePrice
-        <*> optionalFieldOrNullWithOmittedDefault "freeloaders" S.empty "The usernames of users that will not have to pay" .= monetisationConfFreeloaders
 
 data Settings = Settings
   { settingLogLevel :: !LogLevel,
@@ -172,18 +132,10 @@ data Settings = Settings
     settingAutoBackupLooperSettings :: !LooperSettings,
     settingBackupGarbageCollectionLooperSettings :: !LooperSettings,
     settingFileMigrationLooperSettings :: !LooperSettings,
-    settingAdmin :: !(Maybe Username),
-    settingMonetisationSettings :: !(Maybe MonetisationSettings)
+    settingAdmin :: !(Maybe Username)
   }
   deriving (Show, Eq, Generic)
 
-data MonetisationSettings = MonetisationSettings
-  { monetisationSetStripeSecretKey :: !Text,
-    monetisationSetStripePublishableKey :: !Text,
-    monetisationSetStripePrice :: !Text,
-    monetisationSetFreeloaders :: !(Set Username)
-  }
-  deriving (Show, Eq, Generic)
 
 parseLogLevel :: String -> Either String LogLevel
 parseLogLevel s = case readMaybe $ "Level" <> s of

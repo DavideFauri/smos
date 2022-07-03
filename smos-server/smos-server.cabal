@@ -26,7 +26,6 @@ library
       Smos.Server.Handler.Admin.GetUser
       Smos.Server.Handler.Admin.GetUsers
       Smos.Server.Handler.Admin.PostMigrateFiles
-      Smos.Server.Handler.Admin.PutUserSubscription
       Smos.Server.Handler.DeleteBackup
       Smos.Server.Handler.DeleteUser
       Smos.Server.Handler.GetAgendaReport
@@ -34,17 +33,13 @@ library
       Smos.Server.Handler.GetBackup
       Smos.Server.Handler.GetListBackups
       Smos.Server.Handler.GetListSmosFiles
-      Smos.Server.Handler.GetMonetisation
       Smos.Server.Handler.GetNextActionReport
       Smos.Server.Handler.GetSmosFile
       Smos.Server.Handler.GetUserPermissions
-      Smos.Server.Handler.GetUserSubscription
       Smos.Server.Handler.Import
       Smos.Server.Handler.PostBackup
-      Smos.Server.Handler.PostInitiateStripeCheckoutSession
       Smos.Server.Handler.PostLogin
       Smos.Server.Handler.PostRegister
-      Smos.Server.Handler.PostStripeHook
       Smos.Server.Handler.PostSync
       Smos.Server.Handler.PutRestoreBackup
       Smos.Server.Handler.PutSmosFile
@@ -56,7 +51,6 @@ library
       Smos.Server.OptParse
       Smos.Server.OptParse.Types
       Smos.Server.Serve
-      Smos.Server.Subscription
   other-modules:
       Paths_smos_server
   hs-source-dirs:
@@ -96,7 +90,6 @@ library
     , smos-api
     , smos-data
     , smos-report
-    , smos-stripe-client
     , template-haskell
     , text
     , time

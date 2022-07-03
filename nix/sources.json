@@ -287,18 +287,6 @@
         "url": "https://github.com/NorfairKing/smos/archive/391f5bcff9a1f04aab7c9b529b8a08896c027939.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
-    "stripe-spec": {
-        "branch": "master",
-        "description": "An OpenAPI specification for the Stripe API.        ",
-        "homepage": null,
-        "owner": "stripe",
-        "repo": "openapi",
-        "rev": "94e409564847508ea5a448bed7a672047b3bcea5",
-        "sha256": "1azpqwan3997xx0h24xv00zvaavv3fdvkay25r4zjnwy8z7ci6hm",
-        "type": "tarball",
-        "url": "https://github.com/stripe/openapi/archive/94e409564847508ea5a448bed7a672047b3bcea5.tar.gz",
-        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
-    },
     "sydtest": {
         "branch": "development",
         "description": "A modern testing framework for Haskell with good defaults and advanced testing features.",

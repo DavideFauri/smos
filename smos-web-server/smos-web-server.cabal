@@ -19,7 +19,6 @@ extra-source-files:
     templates/auth/login.hamlet
     templates/auth/register.hamlet
     templates/backups.hamlet
-    templates/checkout.hamlet
     templates/default-body.hamlet
     templates/default-page.hamlet
     templates/footer.hamlet
@@ -30,8 +29,6 @@ extra-source-files:
     templates/navbar.julius
     templates/playground.hamlet
     templates/playground.lucius
-    templates/stripe-form.hamlet
-    templates/stripe-form.julius
     templates/terminal.hamlet
     templates/terminal.julius
     templates/tui.hamlet
@@ -59,7 +56,6 @@ library
       Smos.Web.Server.Handler.Account
       Smos.Web.Server.Handler.Admin
       Smos.Web.Server.Handler.Backup
-      Smos.Web.Server.Handler.Checkout
       Smos.Web.Server.Handler.Home
       Smos.Web.Server.Handler.Import
       Smos.Web.Server.Handler.Playground

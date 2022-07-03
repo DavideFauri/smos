@@ -13,35 +13,6 @@ In practice we recommend using Nix for installing Smos.
    git clone https://github.com/NorfairKing/smos
    ```
 
-1. Decide whether you want to build the `smos-server` executable.
-   If you just want to use `smos`, `smos-query` and the other command-line executables, the answer will be "no".
-   In that case, you can remove the `stripe-client` line from the `stack.yaml` file and continue to the next step.
-
-   If you do want to build `smos-server`, then you need to generate the `stripe-client` package.
-
-   1. If you have nix installed, you can run this command and skip the rest of this step:
-
-      ```
-      ./scripts/generate-stripe.sh
-      ```
-
-   1. Get the stripe OpenAPI spec.
-      The `nix/sources.json` file specifies the version of `stripe-spec` to use.
-      You will need the `openapi/spec3.yaml` file from that repository.
-
-   1. Get the openapi3 client code generator:
-
-      ```
-      stack install openapi3-code-generator --stack-yaml setup-stack.yaml
-      ```
-
-   1. Generate the `stripe-client` library using this command:
-
-      ```
-      ~/.local/bin/openapi3-code-generator-exe --specification /path/to/openapi/spec3.yaml --configuration stripe-client-gen.yaml
-      ```
-
-
 1. Install prerequisites:
 
    ```
@@ -62,18 +33,6 @@ In practice we recommend using Nix for installing Smos.
    stack install smos-single
    stack install smos-sync-client
    ```
-
-### Troubleshooting
-
-#### Stripe client
-
-```
-/home/user/src/smos/stripe-client/: getDirectoryContents:openDirStream: does not exist (No such file or directory)
-```
-
-If you see the above error, you probably skipped the "Generate the stripe client" steps above.
-This happens because we generate the stripe client based on the openapi3 spec for Stripe's api.
-This generated code is not committed to the repository.
 
 #### Autoconf
 

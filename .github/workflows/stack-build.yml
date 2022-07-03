@@ -25,9 +25,6 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Get the stripe spec
-        run: curl https://raw.githubusercontent.com/stripe/openapi/0f89038afd23327b714c5b02812508f7a3cd0a57/openapi/spec3.yaml > spec3.yaml
-
       - uses: actions/setup-haskell@v1.1.3
         name: Setup Haskell Stack
         with:
@@ -47,9 +44,6 @@ jobs:
 
       - name: Build openapi3-code-generator
         run: stack install openapi3-code-generator --stack-yaml setup-stack.yaml
-
-      - name: Generate Stripe client
-        run: ~/.local/bin/openapi3-code-generator-exe --configuration stripe-client-gen.yaml --specification spec3.yaml
 
       - name: Build autoexporter
         run: |
@@ -157,7 +151,7 @@ jobs:
       - name: Build smos-sync-client-gen
         run: |
           stack build --system-ghc --test --bench --no-run-tests --no-run-benchmarks --pedantic \
-            smos-sync-client-gen 
+            smos-sync-client-gen
 
       - name: Build smos
         run: |

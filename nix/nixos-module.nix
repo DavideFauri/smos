@@ -147,35 +147,6 @@ in
                 type = types.package;
                 default = smosReleasePackages.smos-server;
               };
-              monetisation = mkOption {
-                description = "Monetisation settings for the API server";
-                type = types.nullOr (types.submodule {
-                  options = {
-                    stripe-secret-key = mkOption {
-                      description = "The stripe api secret key";
-                      type = types.str;
-                      example = "sk_test_XXXXXXXXXXXXXXXXXXXXXXX";
-                    };
-                    stripe-publishable-key = mkOption {
-                      description = "The stripe api publishable key";
-                      type = types.str;
-                      example = "pk_test_XXXXXXXXXXXXXXXXXXXXXXX";
-                    };
-                    stripe-price = mkOption {
-                      description = "The stripe price";
-                      type = types.str;
-                      example = "price_XXXXXXXXXXXXXXXXXXXXXXXX";
-                    };
-                    freeloaders = mkOption {
-                      description = "The usernames of users that will not have to pay";
-                      type = types.listOf types.str;
-                      default = [ ];
-                      example = [ "friend" ];
-                    };
-                  };
-                });
-                default = null;
-              };
             };
         });
       };
@@ -320,7 +291,6 @@ in
         (attrOrNull "auto-backup" auto-backup)
         (attrOrNull "backup-garbage-collector" backup-garbage-collector)
         (attrOrNull "file-migrator" file-migrator)
-        (attrOrNull "monetisation" monetisation)
         cfg.api-server.config
       ];
       apiServerConfigFile = (pkgs.formats.yaml { }).generate "smos-api-server-config.yaml" api-server-config;

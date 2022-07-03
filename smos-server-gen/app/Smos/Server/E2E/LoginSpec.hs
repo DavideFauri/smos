@@ -43,16 +43,6 @@ spec serverVersion =
           withTestLogin cenv $ \t -> do
             UserPermissions {..} <- runClientOrDie cenv $ clientGetUserPermissions t
             userPermissionsIsAdmin `shouldBe` False
-      -- GetUserSubscription was introduced in version 0.2.0
-      when (serverVersion >= version 0 2 0 [] []) $
-        describe "GetUserSubscription" $
-          itWithOuter "can get the test user's permissions" $ \cenv -> do
-            withTestLogin cenv $ \t -> do
-              mMonetisation <- runClientOrDie cenv clientGetMonetisation
-              status <- runClientOrDie cenv $ clientGetUserSubscription t
-              case mMonetisation of
-                Nothing -> status `shouldBe` NoSubscriptionNecessary
-                Just _ -> status `shouldBe` NotSubscribed
       describe "DeleteUser" $ do
         itWithOuter "can delete the test user" $ \cenv -> do
           withTestLogin cenv $ \t -> do

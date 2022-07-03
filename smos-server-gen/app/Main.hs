@@ -4,7 +4,6 @@ import Network.HTTP.Client.TLS
 import Servant.Client
 import Smos.Client
 import Smos.Server.E2E.LoginSpec
-import Smos.Server.E2E.MonetisationSpec
 import Smos.Server.E2E.VersionSpec
 import System.Environment
 import System.Exit
@@ -31,6 +30,5 @@ main = do
         beforeAll (pure cenv) $ do
           Smos.Server.E2E.VersionSpec.spec
           Smos.Server.E2E.LoginSpec.spec serverVersion
-          Smos.Server.E2E.MonetisationSpec.spec serverVersion
 
 newtype ServerUrl = ServerUrl String

@@ -12,7 +12,5 @@ serveDeleteUser ac = withUserId ac $ \uid -> do
     backupIds <- selectKeysList [BackupUser ==. uid] []
     mapM_ deleteBackupById backupIds
     deleteWhere [ServerFileUser ==. uid]
-    deleteWhere [StripeCustomerUser ==. uid]
-    deleteWhere [SubscriptionUser ==. uid]
     delete uid
   pure NoContent
