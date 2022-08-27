@@ -1,5 +1,5 @@
 name: smos-scheduler
-version: 0.3.2
+version: 0.4.0
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
@@ -18,8 +18,8 @@ library:
   dependencies:
     - aeson
     - autodocodec
-    - autodocodec-yaml
     - bytestring
+    - conduit
     - containers
     - cron
     - envparse
@@ -31,9 +31,7 @@ library:
     - path
     - path-io
     - pretty-relative-time
-    - pretty-show
-    - safe-coloured-text
-    - safe-coloured-text-layout
+    - safe
     - safe-coloured-text-terminfo
     - smos-data
     - smos-query
@@ -71,7 +69,9 @@ tests:
     - QuickCheck
     - autodocodec
     - autodocodec-yaml
+    - containers
     - cron
+    - dirforest
     - genvalidity
     - genvalidity-containers
     - genvalidity-path
@@ -91,4 +91,3 @@ tests:
     - sydtest
     - text
     - time
-    - yaml

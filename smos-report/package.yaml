@@ -1,5 +1,5 @@
 name: smos-report
-version: 0.8.1
+version: 0.9.0
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
@@ -19,8 +19,8 @@ library:
   - containers
   - cursor
   - deepseq
-  - deepseq
   - envparse
+  - hashable
   - megaparsec
   - microlens
   - optparse-applicative
@@ -36,3 +36,13 @@ library:
   - validity-path
   - validity-time
   - yaml
+
+tests:
+  smos-report-dummy-test:
+    main: Spec.hs
+    source-dirs: test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+

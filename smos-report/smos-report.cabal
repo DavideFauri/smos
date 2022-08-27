@@ -1,11 +1,11 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.6.
+-- This file has been generated from package.yaml by hpack version 0.34.7.
 --
 -- see: https://github.com/sol/hpack
 
 name:           smos-report
-version:        0.8.1
+version:        0.9.0
 category:       Smos
 author:         Tom Sydney Kerckhove
 maintainer:     syd@cs-syd.eu
@@ -57,6 +57,7 @@ library
     , cursor
     , deepseq
     , envparse
+    , hashable
     , megaparsec
     , microlens
     , optparse-applicative
@@ -72,4 +73,16 @@ library
     , validity-path
     , validity-time
     , yaml
+  default-language: Haskell2010
+
+test-suite smos-report-dummy-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_smos_report
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base
   default-language: Haskell2010

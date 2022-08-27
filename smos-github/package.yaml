@@ -1,5 +1,5 @@
 name: smos-github
-version: 0.5.0
+version: 0.5.1
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
@@ -32,7 +32,6 @@ library:
     - text
     - time
     - validity
-    - validity-path
     - validity-text
 
 executables:
@@ -59,7 +58,6 @@ tests:
     - -with-rtsopts=-N
     - -Wall
     dependencies:
-    - QuickCheck
     - base
     - genvalidity
     - genvalidity-sydtest

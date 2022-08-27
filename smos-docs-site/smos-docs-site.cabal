@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.6.
+-- This file has been generated from package.yaml by hpack version 0.34.7.
 --
 -- see: https://github.com/sol/hpack
 
@@ -45,6 +45,8 @@ extra-source-files:
     content/changelogs/2022-05-27.markdown
     content/changelogs/2022-06-09.markdown
     content/changelogs/2022-06-27.markdown
+    content/changelogs/2022-07-22.markdown
+    content/changelogs/2022-08-20.markdown
     content/pages/blogposts.markdown
     content/pages/building-installation.markdown
     content/pages/cheat-sheet.markdown
@@ -200,7 +202,6 @@ library
     , optparse-applicative
     , path
     , path-io
-    , pretty-show
     , raw-strings-qq
     , semver
     , shakespeare
