@@ -6,6 +6,7 @@ module Smos.Server.Handler.GetBackupSpec
 where
 
 import Codec.Archive.Zip as Zip
+import Control.Concurrent.Async
 import qualified Data.ByteString as SB
 import qualified Data.DirForest as DF
 import qualified Data.Map as M
@@ -15,7 +16,7 @@ import Servant.Types.SourceT
 import Smos.Client
 import Smos.Data
 import Smos.Data.Gen ()
-import Smos.Report.InterestingStore
+import Smos.Directory.InterestingStore
 import Smos.Server.Handler.GetBackup
 import Smos.Server.InterestingStore
 import Smos.Server.TestUtils
@@ -29,6 +30,10 @@ spec =
     serverSpec $ do
       it "can go through the intergration test for any valid store" $ \cenv ->
         forAllValid $ \store -> backupIntegrationTestForInterestingStore cenv store
+      it "does not crash when run twice concurrently" $ \cenv ->
+        forAllValid $ \store -> do
+          let t = backupIntegrationTestForInterestingStore cenv store
+          race_ t t
       it "has no problem with a file that have weird filenames" $ \cenv -> do
         let store =
               emptyInterestingStore

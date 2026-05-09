@@ -1,11 +1,11 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.7.
+-- This file has been generated from package.yaml by hpack version 0.38.3.
 --
 -- see: https://github.com/sol/hpack
 
 name:           smos-report
-version:        0.9.0
+version:        0.12.0
 category:       Smos
 author:         Tom Sydney Kerckhove
 maintainer:     syd@cs-syd.eu
@@ -16,26 +16,22 @@ library
   exposed-modules:
       Smos.Report.Agenda
       Smos.Report.Agenda.Types
-      Smos.Report.Archive
       Smos.Report.Clock
       Smos.Report.Clock.Types
       Smos.Report.Comparison
-      Smos.Report.Config
       Smos.Report.Entry
       Smos.Report.Filter
-      Smos.Report.Formatting
+      Smos.Report.Free
       Smos.Report.Log
       Smos.Report.Next
+      Smos.Report.Ongoing
       Smos.Report.OptParse
-      Smos.Report.OptParse.Types
       Smos.Report.Period
       Smos.Report.Projection
       Smos.Report.Projects
       Smos.Report.Report
-      Smos.Report.ShouldPrint
       Smos.Report.Sorter
       Smos.Report.Stats
-      Smos.Report.Streaming
       Smos.Report.Stuck
       Smos.Report.Tags
       Smos.Report.Time
@@ -48,7 +44,8 @@ library
       src/
   ghc-options: -Wall
   build-depends:
-      aeson
+      IntervalMap
+    , aeson
     , autodocodec
     , autodocodec-yaml
     , base
@@ -56,33 +53,21 @@ library
     , containers
     , cursor
     , deepseq
-    , envparse
-    , hashable
+    , dlist
     , megaparsec
     , microlens
-    , optparse-applicative
+    , opt-env-conf
     , parsec
     , path
-    , path-io
     , pretty-show
     , safe
     , smos-data
+    , smos-directory
     , text
     , time
+    , tz
     , validity
     , validity-path
     , validity-time
     , yaml
-  default-language: Haskell2010
-
-test-suite smos-report-dummy-test
-  type: exitcode-stdio-1.0
-  main-is: Spec.hs
-  other-modules:
-      Paths_smos_report
-  hs-source-dirs:
-      test
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-      base
   default-language: Haskell2010

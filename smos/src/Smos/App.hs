@@ -10,11 +10,14 @@ where
 import Brick.Main as B
 import Brick.Types as B
 import qualified Control.Monad.Trans.Resource as Resource (InternalState)
+import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
+import Data.Sequence (Seq (..), (|>))
 import qualified Data.Sequence as Seq
 import Data.Time
+import Data.Time.Zones
 import qualified Graphics.Vty as Vty
-import Import
+import Path
 import Smos.Actions.File
 import Smos.Activation
 import Smos.Draw
@@ -37,8 +40,9 @@ mkSmosApp res workflowDir sc =
 smosChooseCursor :: s -> [CursorLocation ResourceName] -> Maybe (CursorLocation ResourceName)
 smosChooseCursor _ = showCursorNamed ResourceTextCursor
 
-smosHandleEvent :: Resource.InternalState -> SmosConfig -> SmosState -> Event -> EventM ResourceName (Next SmosState)
-smosHandleEvent res cf s e = do
+smosHandleEvent :: Resource.InternalState -> SmosConfig -> Event -> EventM ResourceName SmosState ()
+smosHandleEvent res cf e = do
+  s <- get :: EventM ResourceName SmosState SmosState
   let func =
         case keyMapFunc s e (configKeyMap cf) of
           NothingActivated ->
@@ -52,10 +56,9 @@ smosHandleEvent res cf s e = do
             func_
             clearKeyHistory
           EventActivated func_ -> func_
-  ((mkHalt, s'), errs) <- runSmosM res cf s func
-  case mkHalt of
-    Stop -> B.halt s'
-    Continue () -> B.continue (s' {smosStateErrorMessages = smosStateErrorMessages s' ++ errs})
+  (a, errs) <- runSmosM res cf func
+  modify (\s_ -> s_ {smosStateErrorMessages = smosStateErrorMessages s_ ++ errs})
+  pure a
   where
     recordKeyPress :: KeyPress -> SmosM ()
     recordKeyPress kp = modify $ \ss -> ss {smosStateKeyHistory = smosStateKeyHistory ss |> kp}
@@ -87,12 +90,12 @@ keyMapFunc s e km = handleRaw $ currentKeyMappings km $ smosStateCursor s
           case se of
             SmosUpdateTime ->
               EventActivated $ do
-                now <- liftIO getZonedTime
+                now <- liftIO getCurrentTime
                 modify
                   ( \s_ ->
                       s_
-                        { smosStateTime = now,
-                          smosStateCursor = editorCursorUpdateTime now $ smosStateCursor s_
+                        { smosStateNow = now,
+                          smosStateCursor = editorCursorUpdateTime (smosStateTimeZone s_) now $ smosStateCursor s_
                         }
                   )
             SmosSaveFile -> EventActivated saveCurrentSmosFile
@@ -112,8 +115,8 @@ activationDebug Activation {..} =
       activationDebugName = activationName
     }
 
-smosStartEvent :: s -> EventM n s
-smosStartEvent = pure
+smosStartEvent :: EventM n s ()
+smosStartEvent = pure ()
 
 buildInitialState :: StartingPath -> ResourceT IO SmosState
 buildInitialState p = do
@@ -123,13 +126,15 @@ buildInitialState p = do
     Just errOrEC -> case errOrEC of
       Left err -> liftIO $ die err
       Right ec -> do
-        zt <- liftIO getZonedTime
-        pure $ initStateWithCursor zt ec
+        zone <- liftIO loadLocalTZ
+        now <- liftIO getCurrentTime
+        pure $ initStateWithCursor zone now ec
 
-initStateWithCursor :: ZonedTime -> EditorCursor -> SmosState
-initStateWithCursor zt ec =
+initStateWithCursor :: TZ -> UTCTime -> EditorCursor -> SmosState
+initStateWithCursor zone now ec =
   SmosState
-    { smosStateTime = zt,
+    { smosStateNow = now,
+      smosStateTimeZone = zone,
       smosStateCursor = ec,
       smosStateKeyHistory = Empty,
       smosStateAsyncs = [],

@@ -1,0 +1,38 @@
+BEGIN:VCALENDAR
+METHOD:REQUEST
+PRODID:-//CS SYD//Smos//EN
+VERSION:2.0
+BEGIN:VEVENT
+ATTENDEE;CN="Example Client Name";PARTSTAT=TENTATIVE;RSVP=TRUE:mailto:cli
+ ent@example.com
+ATTENDEE;CN="Example User Name";RSVP=TRUE:mailto:user@example.com
+CLASS:PRIVATE
+CREATED:20230422T130000Z
+DESCRIPTION:Example Client Name meets Example User Name\n\nFor Example Us
+ er Name:\nThursday 2023-06-22 13:00\n\nFor Example Client Name:\nThursday
+  2023-06-22 05:00\nThis is extra info for the user\nOn\nMultiple\nLines.\
+ nMeeting link: https://meet.jit.si/ExampleClientNameMeetsExampleUserName\
+ n
+DTSTAMP:20230422T130000Z
+DTSTART:20230622T110000Z
+DURATION:PT30M
+LOCATION:https://meet.jit.si/ExampleClientNameMeetsExampleUserName
+ORGANIZER;CN="Example Client Name":mailto:client@example.com
+STATUS:TENTATIVE
+SUMMARY:Example Client Name <> Example User Name
+UID:00000001-0000-0002-0000-000300000004
+URL:https://meet.jit.si/ExampleClientNameMeetsExampleUserName
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Meeting between Example User Name and Example Client Name sta
+ rts in 15 minutes
+TRIGGER:-PT15M
+END:VALARM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Meeting between Example User Name and Example Client Name sta
+ rts in 5 minutes!
+TRIGGER:-PT5M
+END:VALARM
+END:VEVENT
+END:VCALENDAR

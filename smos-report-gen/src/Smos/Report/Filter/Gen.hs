@@ -15,7 +15,6 @@ import Data.GenValidity.Path ()
 import Data.Map (Map)
 import Data.Set (Set)
 import qualified Data.Text as T
-import Debug.Trace
 import Path
 import Smos.Data
 import Smos.Data.Gen ()
@@ -68,7 +67,7 @@ instance GenValid (Filter (Path Rel File)) where
           <$> ( genListOf (genValid `suchThat` (validationIsValid . validateRestrictedChar))
                   `suchThat` (not . null)
               )
-          `suchThatMap` parseRelFile
+            `suchThatMap` parseRelFile
       )
         `suchThat` isValid
   shrinkValid = shrinkValidFilter
@@ -108,7 +107,7 @@ instance GenValid (Filter Entry) where
         ]
   shrinkValid = shrinkValidFilter
 
-instance GenValid (Filter a) => GenValid (Filter (Set a)) where
+instance (GenValid (Filter a)) => GenValid (Filter (Set a)) where
   genValid =
     withTopLevelBranches $
       oneof
@@ -138,11 +137,11 @@ instance
         ]
   shrinkValid = shrinkValidFilter
 
-instance GenValid (Filter a) => GenValid (Filter (Maybe a)) where
+instance (GenValid (Filter a)) => GenValid (Filter (Maybe a)) where
   genValid = withTopLevelBranches $ FilterMaybe <$> genValid <*> genValid
   shrinkValid = shrinkValidFilter
 
-instance GenValid (Filter a) => GenValid (Filter (ForestCursor a)) where
+instance (GenValid (Filter a)) => GenValid (Filter (ForestCursor a)) where
   genValid =
     withTopLevelBranches $
       sized $ \n ->
@@ -163,17 +162,6 @@ instance GenValid (Filter a) => GenValid (Filter (ForestCursor a)) where
                   ]
   shrinkValid = shrinkValidFilter
 
-withEqAndOrToo ::
-  (Show a, Ord a, NFData a, GenValid a, FilterArgument a, FilterOrd a) =>
-  Gen (Filter a) ->
-  Gen (Filter a)
-withEqAndOrToo gen = frequency [(4, gen), (1, eqAndOrd)]
-
-subEqOrd ::
-  (Show a, Ord a, NFData a, GenValid a, FilterArgument a, FilterSubString a, FilterOrd a) =>
-  Gen (Filter a)
-subEqOrd = oneof [eqAndOrd, sub]
-
 eqAndOrd :: (Show a, Ord a, NFData a, GenValid a, FilterArgument a, FilterOrd a) => Gen (Filter a)
 eqAndOrd =
   sized $ \size -> do
@@ -191,7 +179,6 @@ withTopLevelBranches gen =
           sized $ \size -> do
             (a, b) <- genSplit size
             f <$> resize a (withTopLevelBranches gen) <*> resize b (withTopLevelBranches gen)
-    traceShowM n
     case n of
       0 -> gen
       _ -> oneof [gen, genNot, genBin FilterAnd, genBin FilterOr]
@@ -199,7 +186,7 @@ withTopLevelBranches gen =
 shrinkValidFilter :: Filter a -> [Filter a]
 shrinkValidFilter = go
   where
-    goA :: FilterArgument a => a -> [a]
+    goA :: (FilterArgument a) => a -> [a]
     goA a = [a' | Right a' <- parseArgument <$> shrinkValid (renderArgument a)]
     go :: Filter a -> [Filter a]
     go f =

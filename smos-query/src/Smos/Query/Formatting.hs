@@ -1,91 +1,65 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Smos.Query.Formatting
-  ( module Smos.Query.Formatting,
-    module Text.Colour.Layout,
-    module Text.Colour,
-  )
-where
+module Smos.Query.Formatting where
 
 import Data.Foldable
 import Data.Maybe
 import qualified Data.Text as T
 import Data.Time
-import Path
+import Data.Time.Zones
+import Smos.CLI.Colour
+import Smos.CLI.Formatting
 import Smos.Data
-import Smos.Query.OptParse.Types
 import Smos.Report.Agenda
 import Smos.Report.Entry
-import Smos.Report.Formatting
+import Smos.Report.Ongoing
 import Smos.Report.Projection
 import Smos.Report.Stuck
 import Smos.Report.Time
 import Smos.Report.Waiting
 import Text.Colour
-import Text.Colour.Layout
 import Text.Time.Pretty
-
-formatAsBicolourTable :: ColourSettings -> [[Chunk]] -> [Chunk]
-formatAsBicolourTable cc =
-  renderTable
-    . ( \t ->
-          t
-            { tableBackground = case colourSettingBackground cc of
-                UseTableBackground tb -> Just tb
-                NoTableBackground -> Nothing
-            }
-      )
-    . table
 
 showDaysSinceWithThreshold :: Time -> UTCTime -> UTCTime -> Chunk
 showDaysSinceWithThreshold threshold = showDaysSince (floor $ timeNominalDiffTime threshold / nominalDay)
 
-showDaysSince :: Word -> UTCTime -> UTCTime -> Chunk
-showDaysSince threshold now t = fore color $ chunk $ T.pack $ show i <> " days"
-  where
-    th1 = fromIntegral threshold :: Int
-    th2 = floor ((fromIntegral threshold :: Double) / 3 * 2) :: Int
-    th3 = floor ((fromIntegral threshold :: Double) / 3) :: Int
-    color
-      | i >= th1 = red
-      | i >= th2 = yellow
-      | i >= th3 = blue
-      | otherwise = green
-    i = daysSince now t
-
-formatAgendaEntry :: ZonedTime -> AgendaEntry -> [Chunk]
-formatAgendaEntry now AgendaEntry {..} =
-  let tz = zonedTimeZone now
-      d = diffDays (timestampDay agendaEntryTimestamp) (localDay $ zonedTimeToLocalTime now)
+formatAgendaEntry :: TZ -> UTCTime -> AgendaEntry -> [Chunk]
+formatAgendaEntry zone now AgendaEntry {..} =
+  let d = diffDays (localDay $ utcToLocalTimeTZ zone now) (timestampDay agendaEntryTimestamp)
       func =
         if
-            | d <= 0 && agendaEntryTimestampName == "DEADLINE" -> fore red
-            | d == 1 && agendaEntryTimestampName == "DEADLINE" -> fore brightRed . back black
-            | d <= 10 && agendaEntryTimestampName == "DEADLINE" -> fore yellow
-            | d < 0 && agendaEntryTimestampName == "SCHEDULED" -> fore red
-            | d == 0 && agendaEntryTimestampName == "SCHEDULED" -> fore green
-            | otherwise -> id
+          | d >= 0 && agendaEntryTimestampName == "DEADLINE" -> fore red
+          | d == -1 && agendaEntryTimestampName == "DEADLINE" -> fore brightRed . back black
+          | d >= -10 && agendaEntryTimestampName == "DEADLINE" -> fore yellow
+          | d > 0 && agendaEntryTimestampName == "SCHEDULED" -> fore red
+          | d == 0 && agendaEntryTimestampName == "SCHEDULED" -> fore green
+          | otherwise -> id
    in [ func $ chunk $ timestampPrettyText agendaEntryTimestamp,
-        func $
-          bold $
-            chunk $
-              T.pack $
-                case agendaEntryTimestamp of
-                  TimestampDay _ ->
-                    renderDaysAgoAuto $ daysAgo d
-                  TimestampLocalTime lt ->
-                    renderTimeAgoAuto $
-                      timeAgo $
-                        diffUTCTime
-                          (zonedTimeToUTC now)
-                          (localTimeToUTC tz lt),
+        func $ relativeTimestampChunk zone now agendaEntryTimestamp,
         timestampNameChunk agendaEntryTimestampName,
         mTodoStateChunk agendaEntryTodoState,
         headerChunk agendaEntryHeader,
         func $ pathChunk agendaEntryFilePath
       ]
+
+relativeTimestampChunk :: TZ -> UTCTime -> Timestamp -> Chunk
+relativeTimestampChunk zone now =
+  bold
+    . chunk
+    . T.pack
+    . \case
+      TimestampDay d ->
+        let ds = diffDays (localDay $ utcToLocalTimeTZ zone now) d
+         in renderDaysAgoAuto $ daysAgo ds
+      TimestampLocalTime lt ->
+        renderTimeAgoAuto $
+          timeAgo $
+            diffUTCTime
+              now
+              (localTimeToUTCTZ zone lt)
 
 formatWaitingEntry :: Time -> UTCTime -> WaitingEntry -> [Chunk]
 formatWaitingEntry threshold now WaitingEntry {..} =
@@ -95,6 +69,39 @@ formatWaitingEntry threshold now WaitingEntry {..} =
     maybe (chunk "") timeChunk waitingEntryThreshold
   ]
 
+formatOngoingEntry :: TZ -> UTCTime -> OngoingEntry -> [Chunk]
+formatOngoingEntry zone now OngoingEntry {..} =
+  [ pathChunk ongoingEntryFilePath,
+    headerChunk ongoingEntryHeader
+  ]
+    ++ beginEndChunks zone now ongoingEntryBeginEnd
+
+beginEndChunks :: TZ -> UTCTime -> BeginEnd -> [Chunk]
+beginEndChunks zone now = \case
+  OnlyBegin begin ->
+    [ fore brown $ chunk $ timestampPrettyText begin,
+      fore white $ relativeTimestampChunk zone now begin,
+      "",
+      "",
+      "",
+      ""
+    ]
+  OnlyEnd end ->
+    [ "",
+      "",
+      "",
+      fore white $ relativeTimestampChunk zone now end,
+      ""
+    ]
+  BeginEnd begin end ->
+    [ fore brown $ chunk $ timestampPrettyText begin,
+      fore white $ relativeTimestampChunk zone now begin,
+      "-",
+      fore brown $ chunk $ timestampPrettyText end,
+      fore white $ relativeTimestampChunk zone now end,
+      chunk $ T.pack $ beginEndPercentageString (utcToLocalTimeTZ zone now) begin end
+    ]
+
 formatStuckReportEntry :: Time -> UTCTime -> StuckReportEntry -> [Chunk]
 formatStuckReportEntry threshold now StuckReportEntry {..} =
   [ pathChunk stuckReportEntryFilePath,
@@ -102,19 +109,15 @@ formatStuckReportEntry threshold now StuckReportEntry {..} =
     headerChunk stuckReportEntryHeader,
     maybe
       (chunk "")
-      ( \ts -> if ts > now then "future" else showDaysSinceWithThreshold threshold now ts
-      )
+      (\ts -> if ts > now then "future" else showDaysSinceWithThreshold threshold now ts)
       stuckReportEntryLatestChange
   ]
-
-pathChunk :: Path b t -> Chunk
-pathChunk = chunk . T.pack . toFilePath
 
 renderEntryReport :: ColourSettings -> EntryReport -> [Chunk]
 renderEntryReport cc EntryReport {..} =
   formatAsBicolourTable cc $
-    map renderProjectionHeader (toList entryReportHeaders) :
-    map (renderProjectees . toList) entryReportCells
+    map renderProjectionHeader (toList entryReportHeaders)
+      : map (renderProjectees . toList) entryReportCells
 
 renderProjectionHeader :: Projection -> Chunk
 renderProjectionHeader p =
@@ -141,71 +144,5 @@ projecteeChunk p =
     PropertyProjection pn pv -> maybe (chunk "") (propertyValueChunk pn) pv
     TimestampProjection tn tv -> maybe (chunk "") (timestampChunk tn) tv
 
-mTodoStateChunk :: Maybe TodoState -> Chunk
-mTodoStateChunk = maybe (chunk "(none)") todoStateChunk
-
-todoStateChunk :: TodoState -> Chunk
-todoStateChunk ts = (\c -> c {chunkForeground = mcolor}) . chunk . todoStateText $ ts
-  where
-    mcolor =
-      case todoStateText ts of
-        "TODO" -> Just red
-        "NEXT" -> Just orange
-        "STARTED" -> Just orange
-        "WAITING" -> Just blue
-        "READY" -> Just brown
-        "DONE" -> Just green
-        "CANCELLED" -> Just green
-        "FAILED" -> Just brightRed
-        _ -> Nothing
-
-timestampChunk :: TimestampName -> Timestamp -> Chunk
-timestampChunk tsn = (\c -> c {chunkForeground = timestampNameColor tsn}) . chunk . timestampText
-
-timestampNameChunk :: TimestampName -> Chunk
-timestampNameChunk tsn = (\c -> c {chunkForeground = timestampNameColor tsn}) . chunk . timestampNameText $ tsn
-
-timestampNameColor :: TimestampName -> Maybe Colour
-timestampNameColor tsn =
-  case timestampNameText tsn of
-    "BEGIN" -> Just brown
-    "END" -> Just brown
-    "SCHEDULED" -> Just orange
-    "DEADLINE" -> Just red
-    _ -> Nothing
-
-headerChunk :: Header -> Chunk
-headerChunk = fore yellow . chunk . headerText
-
-propertyValueChunk :: PropertyName -> PropertyValue -> Chunk
-propertyValueChunk pn = (\c -> c {chunkForeground = propertyNameColor pn}) . chunk . propertyValueText
-
-propertyNameChunk :: PropertyName -> Chunk
-propertyNameChunk pn = (\c -> c {chunkForeground = propertyNameColor pn}) $ chunk $ propertyNameText pn
-
-propertyNameColor :: PropertyName -> Maybe Colour
-propertyNameColor pn =
-  case propertyNameText pn of
-    "assignee" -> Just blue
-    "brainpower" -> Just brown
-    "client" -> Just green
-    "estimate" -> Just green
-    "goal" -> Just orange
-    "timewindow" -> Just magenta
-    "url" -> Just green
-    _ -> Nothing
-
-tagChunk :: Tag -> Chunk
-tagChunk = fore cyan . chunk . tagText
-
 timeChunk :: Time -> Chunk
 timeChunk = chunk . renderTime
-
-intChunk :: Int -> Chunk
-intChunk = chunk . T.pack . show
-
-orange :: Colour
-orange = color256 214
-
-brown :: Colour
-brown = color256 166

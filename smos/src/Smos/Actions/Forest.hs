@@ -1,5 +1,5 @@
+{-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
 
 module Smos.Actions.Forest
   ( allForestPlainActions,
@@ -50,9 +50,10 @@ import Path
 import Smos.Actions.Utils
 import Smos.Cursor.SmosFileEditor
 import Smos.Data
-import Smos.Report.Archive
-import Smos.Report.Config
-import Smos.Report.Streaming
+import Smos.Directory.Archive
+import Smos.Directory.Resolution
+import Smos.Directory.Streaming
+import Smos.Report.OptParse
 import Smos.Types
 
 allForestPlainActions :: [Action]
@@ -365,7 +366,7 @@ forestClockOutEverywhereInAllFilesAndClockInHere =
 
 clockOutInAllAgendaFiles :: UTCTime -> SmosM ()
 clockOutInAllAgendaFiles now = do
-  dirConfig <- asks $ smosReportConfigDirectoryConfig . configReportConfig
+  dirConfig <- asks $ reportSettingDirectorySettings . configReportSettings
   mCurFile <- gets $ fmap smosFileEditorPath . editorCursorFileCursor . smosStateCursor
   -- We won't clock out in the current file asynchronously because this produces a race condition.
   let isCurrent af =

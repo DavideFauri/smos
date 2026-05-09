@@ -10,19 +10,23 @@ import Conduit
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Map as M
 import Smos.Query.Commands.Import
+import Smos.Report.Period
 import Smos.Report.Stats
 
 smosQueryStats :: StatsSettings -> Q ()
 smosQueryStats StatsSettings {..} = do
-  now <- liftIO getZonedTime
+  zone <- liftIO loadLocalTZ
+  now <- liftIO getCurrentTime
+  let today = localDay (utcToLocalTimeTZ zone now)
+
   wd <- askWorkflowDir
   ad <- askArchiveDir
   pd <- askProjectsDir
   apd <- askArchivedProjectsDir
   let src =
         StatsReportContext
-          { statsReportContextNow = now,
-            statsReportContextPeriod = statsSetPeriod,
+          { statsReportContextTimeZone = zone,
+            statsReportContextInterval = periodInterval today statsSetPeriod,
             statsReportContextWorkflowDir = wd,
             statsReportContextArchiveDir = ad,
             statsReportContextProjectsDir = pd,
@@ -37,7 +41,7 @@ smosQueryStats StatsSettings {..} = do
   outputChunks $ renderStatsReport colourSettings statsReport
 
 accumulateStatsReport :: StatsReportContext -> ConduitT (Path Rel File, SmosFile) Void Q StatsReport
-accumulateStatsReport src = C.map (uncurry $ makeStatsReport src) .| accumulateMonoid
+accumulateStatsReport src = C.map (uncurry $ makeStatsReport src) .| C.fold
 
 renderStatsReport :: ColourSettings -> StatsReport -> [Chunk]
 renderStatsReport colourSettings StatsReport {..} =

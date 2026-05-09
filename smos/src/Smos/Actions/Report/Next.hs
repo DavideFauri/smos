@@ -4,9 +4,10 @@ module Smos.Actions.Report.Next where
 
 import Smos.Actions.File
 import Smos.Actions.Utils
-import Smos.Report.Archive
-import Smos.Report.Config
-import Smos.Report.ShouldPrint
+import Smos.Directory.Archive
+import Smos.Directory.Resolution
+import Smos.Directory.ShouldPrint
+import Smos.Report.OptParse
 import Smos.Types
 
 allPlainReportNextActions :: [Action]
@@ -35,7 +36,7 @@ reportNextActions =
     { actionName = "reportNextActions",
       actionFunc = modifyEditorCursorS $ \ec -> do
         saveCurrentSmosFile
-        dc <- asks $ smosReportConfigDirectoryConfig . configReportConfig
+        dc <- asks $ reportSettingDirectorySettings . configReportSettings
         narc <- liftIO $ produceNextActionReportCursor Nothing HideArchive DontPrint dc
         pure $
           ec
@@ -86,7 +87,7 @@ enterNextActionFile =
         case editorCursorReportCursor $ smosStateCursor ss of
           Just rc -> case rc of
             ReportNextActions narc -> do
-              dc <- asks $ smosReportConfigDirectoryConfig . configReportConfig
+              dc <- asks $ reportSettingDirectorySettings . configReportSettings
               wd <- liftIO $ resolveDirWorkflowDir dc
               case nextActionReportCursorBuildSmosFileCursor wd narc of
                 Nothing -> pure ()

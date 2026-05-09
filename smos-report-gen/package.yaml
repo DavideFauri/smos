@@ -1,5 +1,5 @@
 name: smos-report-gen
-version: 0.4.3
+version: 0.8.0
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
@@ -16,61 +16,24 @@ library:
   source-dirs: src/
   ghc-options: -Wall
   dependencies:
+  - IntervalMap
   - QuickCheck
-  - bytestring
   - containers
   - cursor
   - cursor-gen
   - deepseq
-  - dirforest
+  - dlist
   - genvalidity >=1.0
-  - genvalidity-bytestring
   - genvalidity-containers
-  - genvalidity-dirforest
   - genvalidity-path
-  - genvalidity-sydtest
-  - genvalidity-text
   - genvalidity-time
   - path
-  - path-io
   - smos-data
   - smos-data-gen
+  - smos-directory-gen
   - smos-report
   - text
   - time
-
-tests:
-  smos-report-test:
-    main: Spec.hs
-    source-dirs: test/
-    build-tools: sydtest-discover
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    - -Wall
-    dependencies:
-    - QuickCheck
-    - containers
-    - cursor
-    - cursor-gen
-    - dirforest
-    - genvalidity-containers
-    - genvalidity-sydtest
-    - genvalidity-sydtest-aeson
-    - genvalidity-path
-    - sydtest
-    - megaparsec
-    - parsec
-    - path
-    - smos-data
-    - smos-data-gen
-    - smos-report
-    - smos-report
-    - smos-report-gen
-    - text
-    - time
-
 
 benchmarks:
   smos-report-bench:
@@ -94,3 +57,38 @@ benchmarks:
     - smos-report
     - smos-report-gen
     - text
+
+tests:
+  smos-report-test:
+    main: Spec.hs
+    source-dirs: test/
+    build-tools: sydtest-discover
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -Wall
+    dependencies:
+    - IntervalMap
+    - QuickCheck
+    - containers
+    - cursor
+    - cursor-gen
+    - dirforest
+    - genvalidity-path
+    - genvalidity-sydtest
+    - genvalidity-sydtest-aeson
+    - megaparsec
+    - parsec
+    - path
+    - smos-data
+    - smos-data-gen
+    - smos-directory
+    - smos-directory-gen
+    - smos-report
+    - smos-report
+    - smos-report-gen
+    - sydtest
+    - text
+    - time
+    - tz

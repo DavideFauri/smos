@@ -1,11 +1,11 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.7.
+-- This file has been generated from package.yaml by hpack version 0.38.3.
 --
 -- see: https://github.com/sol/hpack
 
 name:           smos-cursor-gen
-version:        0.2.1
+version:        0.2.2
 homepage:       https://github.com/NorfairKing/smos#readme
 bug-reports:    https://github.com/NorfairKing/smos/issues
 author:         Tom Sydney Kerckhove

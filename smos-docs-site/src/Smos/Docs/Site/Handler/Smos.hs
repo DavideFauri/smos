@@ -12,6 +12,7 @@ module Smos.Docs.Site.Handler.Smos
 where
 
 import Autodocodec
+import Autodocodec.Yaml
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Set (Set)
@@ -20,23 +21,12 @@ import Data.Text (Text)
 import qualified Data.Text.Encoding as TE
 import Data.Time
 import Data.Yaml.Builder as Yaml
-import qualified Env
-import Options.Applicative
-import Options.Applicative.Help
 import Smos.Data
 import Smos.Docs.Site.Handler.Import hiding (Header)
 import Smos.OptParse as TUI
 
 getSmosR :: Handler Html
-getSmosR = do
-  DocPage {..} <- lookupPage "smos"
-  let argsHelpText = getHelpPageOf []
-      envHelpText = Env.helpDoc TUI.prefixedEnvironmentParser
-      confHelpText = yamlDesc @TUI.Configuration
-  defaultLayout $ do
-    setSmosTitle "smos"
-    setDescriptionIdemp "Documentation for the Smos TUI"
-    $(widgetFile "args")
+getSmosR = makeSettingsPage @TUI.Instructions "smos"
 
 getSmosFileR :: Handler Html
 getSmosFileR = do
@@ -174,8 +164,8 @@ exampleLogbook =
 logbookDesc :: Text
 logbookDesc = yamlDesc @Logbook
 
-example :: HasCodec a => a -> Text
-example = TE.decodeUtf8 . Yaml.toByteString . Autodocodec
+example :: (HasCodec a) => a -> Text
+example = TE.decodeUtf8 . Yaml.toByteString . AutodocodecYaml
 
 exampleEntry :: Entry
 exampleEntry =
@@ -230,12 +220,3 @@ exampleEntry =
 
 smosFileDesc :: Text
 smosFileDesc = yamlDesc @SmosFile
-
-getHelpPageOf :: [String] -> String
-getHelpPageOf args =
-  let res = runArgumentsParser $ args ++ ["--help"]
-   in case res of
-        Failure fr ->
-          let (ph, _, cols) = execFailure fr "smos"
-           in renderHelp cols ph
-        _ -> error "Something went wrong while calling the option parser."

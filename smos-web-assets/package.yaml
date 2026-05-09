@@ -1,0 +1,22 @@
+name: smos-web-assets
+version: 0.0.2
+category: Smos
+author: Tom Sydney Kerckhove
+maintainer: syd@cs-syd.eu
+license: MIT
+
+extra-source-files:
+- style/mybulma.scss
+
+dependencies:
+- base
+
+library:
+  source-dirs: src/
+  ghc-options: -Wall
+  build-tools: autoexporter
+  dependencies:
+  - path
+  - path-io
+  - template-haskell
+  - yesod-static

@@ -1,235 +1,150 @@
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-unused-pattern-binds #-}
 
-module Smos.OptParse
-  ( module Smos.OptParse,
-    module Smos.OptParse.Types,
-  )
-where
+module Smos.OptParse where
 
+import Autodocodec
+import Data.List
+import Data.Maybe
 import qualified Data.Text as T
-import Data.Version
-import qualified Env
-import Import
-import Options.Applicative
-import Options.Applicative.Help.Pretty as Doc
-import Paths_smos
+import OptEnvConf
+import Paths_smos (version)
 import Smos.Actions
-import Smos.Data
+import Smos.CLI.OptParse
 import Smos.Keys
-import Smos.OptParse.Bare
-import Smos.OptParse.Types
 import qualified Smos.Report.OptParse as Report
 import Smos.Types
-import qualified System.Environment as System
 import System.Exit (die)
 
-getInstructions :: SmosConfig -> IO Instructions
-getInstructions conf = do
-  Arguments mfp flags <- getArguments
-  env <- getEnvironment
-  config <- getConfiguration flags env
-  combineToInstructions conf mfp (Report.flagWithRestFlags flags) (Report.envWithRestEnv env) config
-
-combineToInstructions ::
-  SmosConfig -> Maybe FilePath -> Flags -> Environment -> Maybe Configuration -> IO Instructions
-combineToInstructions sc@SmosConfig {..} mfp Flags {..} Environment {..} mc = do
-  curDir <- getCurrentDir
-  mst <- mapM (resolveStartingPath curDir) mfp
-  src <-
-    Report.combineToConfig
-      configReportConfig
-      flagReportFlags
-      envReportEnvironment
-      (confReportConf <$> mc)
+getInstructions :: SmosConfig -> IO (Maybe StartingPath, SmosConfig)
+getInstructions sc@SmosConfig {..} = do
+  Instructions msp Settings {..} <- runSettingsParser version "Smos TUI editor"
   keyMap <-
-    case combineKeymap configKeyMap $ mc >>= confKeybindingsConf of
+    case combineKeymap configKeyMap settingKeybindings of
       CombErr errs -> die $ unlines $ map prettyCombError errs
       Combined keyMap -> pure keyMap
+  let SmosConfig _ _ _ _ = undefined
   let sc' =
         sc
           { configKeyMap = keyMap,
-            configReportConfig = src,
-            configExplainerMode = fromMaybe configExplainerMode $ flagExplainerMode <|> envExplainerMode <|> (mc >>= confExplainerMode)
+            configReportSettings = settingReportSettings,
+            configExplainerMode = fromMaybe configExplainerMode settingExplainerMode,
+            configSandboxMode = fromMaybe configSandboxMode settingSandboxMode
           }
-  pure $ Instructions mst sc'
+  pure (msp, sc')
 
 combineKeymap :: KeyMap -> Maybe KeybindingsConfiguration -> Comb KeyMap
 combineKeymap km Nothing = pure km
-combineKeymap km (Just kbc) = do
+combineKeymap km (Just kbc) =
   let KeyMap _ _ _ _ _ = undefined
-  let startingPoint =
+      startingPoint =
         case confReset kbc of
           Just True -> mempty
           Just False -> km
           Nothing -> km
-  keyMapFileKeyMap <- combineFileKeymap (keyMapFileKeyMap startingPoint) (confFileKeyConfig kbc)
-  keyMapBrowserKeyMap <- combineBrowserKeyMap (keyMapBrowserKeyMap km) (confBrowserKeyConfig kbc)
-  keyMapReportsKeyMap <-
-    combineReportsKeymap (keyMapReportsKeyMap startingPoint) (confReportsKeyConfig kbc)
-  keyMapHelpKeyMap <- combineHelpKeymap (keyMapHelpKeyMap startingPoint) (confHelpKeyConfig kbc)
-  keyMapAnyKeyMap <- combineKeyMappings (keyMapAnyKeyMap km) (confAnyKeyConfig kbc)
-  pure
-    startingPoint
-      { keyMapFileKeyMap = keyMapFileKeyMap,
-        keyMapBrowserKeyMap = keyMapBrowserKeyMap,
-        keyMapReportsKeyMap = keyMapReportsKeyMap,
-        keyMapHelpKeyMap = keyMapHelpKeyMap,
-        keyMapAnyKeyMap = keyMapAnyKeyMap
-      }
+   in KeyMap
+        <$> combineFileKeymap (keyMapFileKeyMap startingPoint) (confFileKeyConfig kbc)
+        <*> combineBrowserKeyMap (keyMapBrowserKeyMap startingPoint) (confBrowserKeyConfig kbc)
+        <*> combineReportsKeymap (keyMapReportsKeyMap startingPoint) (confReportsKeyConfig kbc)
+        <*> combineHelpKeymap (keyMapHelpKeyMap startingPoint) (confHelpKeyConfig kbc)
+        <*> combineKeyMappings (keyMapAnyKeyMap startingPoint) (confAnyKeyConfig kbc)
 
 combineFileKeymap :: FileKeyMap -> Maybe FileKeyConfigs -> Comb FileKeyMap
 combineFileKeymap fkm Nothing = pure fkm
-combineFileKeymap fkm (Just fkc) = do
+combineFileKeymap fkm (Just fkc) =
   let FileKeyMap _ _ _ _ _ _ _ _ _ _ = undefined
-  fileKeyMapEmptyMatchers <- combineKeyMappings (fileKeyMapEmptyMatchers fkm) (emptyKeyConfigs fkc)
-  fileKeyMapEntryMatchers <- combineKeyMappings (fileKeyMapEntryMatchers fkm) (entryKeyConfigs fkc)
-  fileKeyMapHeaderMatchers <-
-    combineKeyMappings (fileKeyMapHeaderMatchers fkm) (headerKeyConfigs fkc)
-  fileKeyMapContentsMatchers <-
-    combineKeyMappings (fileKeyMapContentsMatchers fkm) (contentsKeyConfigs fkc)
-  fileKeyMapTimestampsMatchers <-
-    combineKeyMappings (fileKeyMapTimestampsMatchers fkm) (timestampsKeyConfigs fkc)
-  fileKeyMapPropertiesMatchers <-
-    combineKeyMappings (fileKeyMapPropertiesMatchers fkm) (propertiesKeyConfigs fkc)
-  fileKeyMapStateHistoryMatchers <-
-    combineKeyMappings (fileKeyMapStateHistoryMatchers fkm) (stateHistoryKeyConfigs fkc)
-  fileKeyMapTagsMatchers <- combineKeyMappings (fileKeyMapTagsMatchers fkm) (tagsKeyConfigs fkc)
-  fileKeyMapLogbookMatchers <-
-    combineKeyMappings (fileKeyMapLogbookMatchers fkm) (logbookKeyConfigs fkc)
-  fileKeyMapAnyMatchers <- combineKeyMappings (fileKeyMapAnyMatchers fkm) (anyKeyConfigs fkc)
-  pure $
-    fkm
-      { fileKeyMapEmptyMatchers = fileKeyMapEmptyMatchers,
-        fileKeyMapEntryMatchers = fileKeyMapEntryMatchers,
-        fileKeyMapHeaderMatchers = fileKeyMapHeaderMatchers,
-        fileKeyMapContentsMatchers = fileKeyMapContentsMatchers,
-        fileKeyMapTimestampsMatchers = fileKeyMapTimestampsMatchers,
-        fileKeyMapPropertiesMatchers = fileKeyMapPropertiesMatchers,
-        fileKeyMapStateHistoryMatchers = fileKeyMapStateHistoryMatchers,
-        fileKeyMapTagsMatchers = fileKeyMapTagsMatchers,
-        fileKeyMapLogbookMatchers = fileKeyMapLogbookMatchers,
-        fileKeyMapAnyMatchers = fileKeyMapAnyMatchers
-      }
+   in FileKeyMap
+        <$> combineKeyMappings (fileKeyMapEmptyMatchers fkm) (emptyKeyConfigs fkc)
+        <*> combineKeyMappings (fileKeyMapEntryMatchers fkm) (entryKeyConfigs fkc)
+        <*> combineKeyMappings (fileKeyMapHeaderMatchers fkm) (headerKeyConfigs fkc)
+        <*> combineKeyMappings (fileKeyMapContentsMatchers fkm) (contentsKeyConfigs fkc)
+        <*> combineKeyMappings (fileKeyMapTimestampsMatchers fkm) (timestampsKeyConfigs fkc)
+        <*> combineKeyMappings (fileKeyMapPropertiesMatchers fkm) (propertiesKeyConfigs fkc)
+        <*> combineKeyMappings (fileKeyMapStateHistoryMatchers fkm) (stateHistoryKeyConfigs fkc)
+        <*> combineKeyMappings (fileKeyMapTagsMatchers fkm) (tagsKeyConfigs fkc)
+        <*> combineKeyMappings (fileKeyMapLogbookMatchers fkm) (logbookKeyConfigs fkc)
+        <*> combineKeyMappings (fileKeyMapAnyMatchers fkm) (anyKeyConfigs fkc)
 
 combineBrowserKeyMap :: BrowserKeyMap -> Maybe BrowserKeyConfigs -> Comb BrowserKeyMap
 combineBrowserKeyMap bkm Nothing = pure bkm
-combineBrowserKeyMap bkm (Just bkc) = do
-  ekms <- combineKeyMappings (browserKeyMapExistentMatchers bkm) (browserExistentKeyConfigs bkc)
-  pms <- combineKeyMappings (browserKeyMapInProgressMatchers bkm) (browserInProgressKeyConfigs bkc)
-  ems <- combineKeyMappings (browserKeyMapEmptyMatchers bkm) (browserEmptyKeyConfigs bkc)
-  ams <- combineKeyMappings (browserKeyMapAnyMatchers bkm) (browserAnyKeyConfigs bkc)
-  pure $
-    bkm
-      { browserKeyMapExistentMatchers = ekms,
-        browserKeyMapInProgressMatchers = pms,
-        browserKeyMapEmptyMatchers = ems,
-        browserKeyMapAnyMatchers = ams
-      }
+combineBrowserKeyMap bkm (Just bkc) =
+  let BrowserKeyMap _ _ _ _ _ = undefined
+   in BrowserKeyMap
+        <$> combineKeyMappings (browserKeyMapExistentMatchers bkm) (browserExistentKeyConfigs bkc)
+        <*> combineKeyMappings (browserKeyMapInProgressMatchers bkm) (browserInProgressKeyConfigs bkc)
+        <*> combineKeyMappings (browserKeyMapEmptyMatchers bkm) (browserEmptyKeyConfigs bkc)
+        <*> combineKeyMappings (browserKeyMapFilterMatchers bkm) (browserFilterKeyConfigs bkc)
+        <*> combineKeyMappings (browserKeyMapAnyMatchers bkm) (browserAnyKeyConfigs bkc)
 
 combineReportsKeymap :: ReportsKeyMap -> Maybe ReportsKeyConfigs -> Comb ReportsKeyMap
 combineReportsKeymap rkm Nothing = pure rkm
-combineReportsKeymap rkm (Just rkc) = do
-  let ReportsKeyMap _ _ _ _ _ _ = undefined
-  narkms <- combineNextActionReportKeyMap (reportsKeymapNextActionReportKeyMap rkm) (nextActionReportKeyConfigs rkc)
-  wrkms <- combineWaitingReportKeyMap (reportsKeymapWaitingReportKeyMap rkm) (waitingReportKeyConfigs rkc)
-  tsrkms <- combineTimestampsReportKeyMap (reportsKeymapTimestampsReportKeyMap rkm) (timestampsReportKeyConfigs rkc)
-  srkms <- combineStuckReportKeyMap (reportsKeymapStuckReportKeyMap rkm) (stuckReportKeyConfigs rkc)
-  workrkms <- combineWorkReportKeyMap (reportsKeymapWorkReportKeyMap rkm) (workReportKeyConfigs rkc)
-  ams <- combineKeyMappings (reportsKeymapAnyMatchers rkm) (anyReportKeyConfigs rkc)
-  pure $
-    rkm
-      { reportsKeymapNextActionReportKeyMap = narkms,
-        reportsKeymapWaitingReportKeyMap = wrkms,
-        reportsKeymapTimestampsReportKeyMap = tsrkms,
-        reportsKeymapStuckReportKeyMap = srkms,
-        reportsKeymapWorkReportKeyMap = workrkms,
-        reportsKeymapAnyMatchers = ams
-      }
+combineReportsKeymap rkm (Just rkc) =
+  ReportsKeyMap
+    <$> combineNextActionReportKeyMap (reportsKeymapNextActionReportKeyMap rkm) (nextActionReportKeyConfigs rkc)
+    <*> combineWaitingReportKeyMap (reportsKeymapWaitingReportKeyMap rkm) (waitingReportKeyConfigs rkc)
+    <*> combineOngoingReportKeyMap (reportsKeymapOngoingReportKeyMap rkm) (ongoingReportKeyConfigs rkc)
+    <*> combineTimestampsReportKeyMap (reportsKeymapTimestampsReportKeyMap rkm) (timestampsReportKeyConfigs rkc)
+    <*> combineStuckReportKeyMap (reportsKeymapStuckReportKeyMap rkm) (stuckReportKeyConfigs rkc)
+    <*> combineWorkReportKeyMap (reportsKeymapWorkReportKeyMap rkm) (workReportKeyConfigs rkc)
+    <*> combineKeyMappings (reportsKeymapAnyMatchers rkm) (anyReportKeyConfigs rkc)
 
 combineNextActionReportKeyMap :: NextActionReportKeyMap -> Maybe NextActionReportKeyConfigs -> Comb NextActionReportKeyMap
 combineNextActionReportKeyMap narkm Nothing = pure narkm
-combineNextActionReportKeyMap narkm (Just narkc) = do
-  let NextActionReportKeyMap _ _ _ = undefined
-  nms <- combineKeyMappings (nextActionReportMatchers narkm) (nextActionReportNormalKeyConfigs narkc)
-  sms <- combineKeyMappings (nextActionReportSearchMatchers narkm) (nextActionReportSearchKeyConfigs narkc)
-  ams <- combineKeyMappings (nextActionReportAnyMatchers narkm) (nextActionReportAnyKeyConfigs narkc)
-  pure $
-    narkm
-      { nextActionReportMatchers = nms,
-        nextActionReportSearchMatchers = sms,
-        nextActionReportAnyMatchers = ams
-      }
+combineNextActionReportKeyMap narkm (Just narkc) =
+  NextActionReportKeyMap
+    <$> combineKeyMappings (nextActionReportMatchers narkm) (nextActionReportNormalKeyConfigs narkc)
+    <*> combineKeyMappings (nextActionReportSearchMatchers narkm) (nextActionReportSearchKeyConfigs narkc)
+    <*> combineKeyMappings (nextActionReportAnyMatchers narkm) (nextActionReportAnyKeyConfigs narkc)
 
 combineWaitingReportKeyMap :: WaitingReportKeyMap -> Maybe WaitingReportKeyConfigs -> Comb WaitingReportKeyMap
 combineWaitingReportKeyMap narkm Nothing = pure narkm
-combineWaitingReportKeyMap narkm (Just narkc) = do
-  let WaitingReportKeyMap _ _ _ = undefined
-  nms <- combineKeyMappings (waitingReportMatchers narkm) (waitingReportNormalKeyConfigs narkc)
-  sms <- combineKeyMappings (waitingReportSearchMatchers narkm) (waitingReportSearchKeyConfigs narkc)
-  ams <- combineKeyMappings (waitingReportAnyMatchers narkm) (waitingReportAnyKeyConfigs narkc)
-  pure $
-    narkm
-      { waitingReportMatchers = nms,
-        waitingReportSearchMatchers = sms,
-        waitingReportAnyMatchers = ams
-      }
+combineWaitingReportKeyMap narkm (Just narkc) =
+  WaitingReportKeyMap
+    <$> combineKeyMappings (waitingReportMatchers narkm) (waitingReportNormalKeyConfigs narkc)
+    <*> combineKeyMappings (waitingReportSearchMatchers narkm) (waitingReportSearchKeyConfigs narkc)
+    <*> combineKeyMappings (waitingReportAnyMatchers narkm) (waitingReportAnyKeyConfigs narkc)
+
+combineOngoingReportKeyMap :: OngoingReportKeyMap -> Maybe OngoingReportKeyConfigs -> Comb OngoingReportKeyMap
+combineOngoingReportKeyMap narkm Nothing = pure narkm
+combineOngoingReportKeyMap narkm (Just narkc) =
+  OngoingReportKeyMap
+    <$> combineKeyMappings (ongoingReportMatchers narkm) (ongoingReportNormalKeyConfigs narkc)
+    <*> combineKeyMappings (ongoingReportSearchMatchers narkm) (ongoingReportSearchKeyConfigs narkc)
+    <*> combineKeyMappings (ongoingReportAnyMatchers narkm) (ongoingReportAnyKeyConfigs narkc)
 
 combineTimestampsReportKeyMap :: TimestampsReportKeyMap -> Maybe TimestampsReportKeyConfigs -> Comb TimestampsReportKeyMap
 combineTimestampsReportKeyMap narkm Nothing = pure narkm
-combineTimestampsReportKeyMap narkm (Just narkc) = do
-  let TimestampsReportKeyMap _ _ _ = undefined
-  nms <- combineKeyMappings (timestampsReportMatchers narkm) (timestampsReportNormalKeyConfigs narkc)
-  sms <- combineKeyMappings (timestampsReportSearchMatchers narkm) (timestampsReportSearchKeyConfigs narkc)
-  ams <- combineKeyMappings (timestampsReportAnyMatchers narkm) (timestampsReportAnyKeyConfigs narkc)
-  pure $
-    narkm
-      { timestampsReportMatchers = nms,
-        timestampsReportSearchMatchers = sms,
-        timestampsReportAnyMatchers = ams
-      }
+combineTimestampsReportKeyMap narkm (Just narkc) =
+  TimestampsReportKeyMap
+    <$> combineKeyMappings (timestampsReportMatchers narkm) (timestampsReportNormalKeyConfigs narkc)
+    <*> combineKeyMappings (timestampsReportSearchMatchers narkm) (timestampsReportSearchKeyConfigs narkc)
+    <*> combineKeyMappings (timestampsReportAnyMatchers narkm) (timestampsReportAnyKeyConfigs narkc)
 
 combineStuckReportKeyMap :: StuckReportKeyMap -> Maybe StuckReportKeyConfigs -> Comb StuckReportKeyMap
 combineStuckReportKeyMap narkm Nothing = pure narkm
-combineStuckReportKeyMap narkm (Just narkc) = do
-  let StuckReportKeyMap _ _ = undefined
-  nms <- combineKeyMappings (stuckReportMatchers narkm) (stuckReportNormalKeyConfigs narkc)
-  ams <- combineKeyMappings (stuckReportAnyMatchers narkm) (stuckReportAnyKeyConfigs narkc)
-  pure $
-    narkm
-      { stuckReportMatchers = nms,
-        stuckReportAnyMatchers = ams
-      }
+combineStuckReportKeyMap narkm (Just narkc) =
+  StuckReportKeyMap
+    <$> combineKeyMappings (stuckReportMatchers narkm) (stuckReportNormalKeyConfigs narkc)
+    <*> combineKeyMappings (stuckReportAnyMatchers narkm) (stuckReportAnyKeyConfigs narkc)
 
 combineWorkReportKeyMap :: WorkReportKeyMap -> Maybe WorkReportKeyConfigs -> Comb WorkReportKeyMap
 combineWorkReportKeyMap narkm Nothing = pure narkm
-combineWorkReportKeyMap narkm (Just narkc) = do
-  let WorkReportKeyMap _ _ _ = undefined
-  nms <- combineKeyMappings (workReportMatchers narkm) (workReportNormalKeyConfigs narkc)
-  sms <- combineKeyMappings (workReportSearchMatchers narkm) (workReportSearchKeyConfigs narkc)
-  ams <- combineKeyMappings (workReportAnyMatchers narkm) (workReportAnyKeyConfigs narkc)
-  pure $
-    narkm
-      { workReportMatchers = nms,
-        workReportSearchMatchers = sms,
-        workReportAnyMatchers = ams
-      }
+combineWorkReportKeyMap narkm (Just narkc) =
+  WorkReportKeyMap
+    <$> combineKeyMappings (workReportMatchers narkm) (workReportNormalKeyConfigs narkc)
+    <*> combineKeyMappings (workReportSearchMatchers narkm) (workReportSearchKeyConfigs narkc)
+    <*> combineKeyMappings (workReportAnyMatchers narkm) (workReportAnyKeyConfigs narkc)
 
 combineHelpKeymap :: HelpKeyMap -> Maybe HelpKeyConfigs -> Comb HelpKeyMap
 combineHelpKeymap hkm Nothing = pure hkm
-combineHelpKeymap hkm (Just hkc) = do
-  let HelpKeyMap _ _ _ = undefined
-  hms <- combineKeyMappings (helpKeyMapHelpMatchers hkm) (helpHelpKeyConfigs hkc)
-  sms <- combineKeyMappings (helpKeyMapSearchMatchers hkm) (helpSearchKeyConfigs hkc)
-  ams <- combineKeyMappings (helpKeyMapAnyMatchers hkm) (helpAnyKeyConfigs hkc)
-  pure $
-    hkm
-      { helpKeyMapHelpMatchers = hms,
-        helpKeyMapSearchMatchers = sms,
-        helpKeyMapAnyMatchers = ams
-      }
+combineHelpKeymap hkm (Just hkc) =
+  HelpKeyMap
+    <$> combineKeyMappings (helpKeyMapHelpMatchers hkm) (helpHelpKeyConfigs hkc)
+    <*> combineKeyMappings (helpKeyMapSearchMatchers hkm) (helpSearchKeyConfigs hkc)
+    <*> combineKeyMappings (helpKeyMapAnyMatchers hkm) (helpAnyKeyConfigs hkc)
 
 combineKeyMappings :: KeyMappings -> Maybe KeyConfigs -> Comb KeyMappings
 combineKeyMappings kms Nothing = pure kms
@@ -288,56 +203,350 @@ prettyCombError (ActionNotFound a) = unwords ["Action not found:", T.unpack $ ac
 prettyCombError (ActionWrongType a) =
   unwords ["Action found, but of the wrong type:", T.unpack $ actionNameText a]
 
-getConfiguration :: Report.FlagsWithConfigFile Flags -> Report.EnvWithConfigFile Environment -> IO (Maybe Configuration)
-getConfiguration = Report.getConfiguration
+data KeybindingsConfiguration = KeybindingsConfiguration
+  { confReset :: !(Maybe Bool),
+    confFileKeyConfig :: !(Maybe FileKeyConfigs),
+    confBrowserKeyConfig :: !(Maybe BrowserKeyConfigs),
+    confReportsKeyConfig :: !(Maybe ReportsKeyConfigs),
+    confHelpKeyConfig :: !(Maybe HelpKeyConfigs),
+    confAnyKeyConfig :: !(Maybe KeyConfigs)
+  }
 
-getEnvironment :: IO (Report.EnvWithConfigFile Environment)
-getEnvironment = Env.parse (Env.header "Environment") prefixedEnvironmentParser
+instance HasParser KeybindingsConfiguration where
+  settingsParser = parseKeybindingsConfiguration
 
-prefixedEnvironmentParser :: Env.Parser Env.Error (Report.EnvWithConfigFile Environment)
-prefixedEnvironmentParser = Env.prefixed "SMOS_" environmentParser
+{-# ANN parseKeybindingsConfiguration ("NOCOVER" :: String) #-}
+parseKeybindingsConfiguration :: OptEnvConf.Parser KeybindingsConfiguration
+parseKeybindingsConfiguration = do
+  confReset <-
+    setting
+      [ help "Whether to reset all keybindings. Set this to false to add keys, set this to true to replace keys.",
+        conf "reset"
+      ]
+  confFileKeyConfig <-
+    setting
+      [ help "Keybindings for the file context",
+        conf "file"
+      ]
+  confBrowserKeyConfig <-
+    setting
+      [ help "Keybindings for the file browser context",
+        conf "browser"
+      ]
+  confReportsKeyConfig <-
+    setting
+      [ help "Keybindings for the reports context",
+        conf "reports"
+      ]
+  confHelpKeyConfig <-
+    setting
+      [ help "Keybindings for the help context",
+        conf "help"
+      ]
+  confAnyKeyConfig <-
+    setting
+      [ help "Keybindings for any context",
+        conf "any"
+      ]
+  pure KeybindingsConfiguration {..}
 
-environmentParser :: Env.Parser Env.Error (Report.EnvWithConfigFile Environment)
-environmentParser =
-  Report.envWithConfigFileParser $
-    Environment
-      <$> Report.environmentParser
-      <*> optional (Env.var Env.auto "EXPLAINER_MODE" (Env.help "Activate explainer mode to show what is happening"))
+data FileKeyConfigs = FileKeyConfigs
+  { emptyKeyConfigs :: !(Maybe KeyConfigs),
+    entryKeyConfigs :: !(Maybe KeyConfigs),
+    headerKeyConfigs :: !(Maybe KeyConfigs),
+    contentsKeyConfigs :: !(Maybe KeyConfigs),
+    timestampsKeyConfigs :: !(Maybe KeyConfigs),
+    propertiesKeyConfigs :: !(Maybe KeyConfigs),
+    stateHistoryKeyConfigs :: !(Maybe KeyConfigs),
+    tagsKeyConfigs :: !(Maybe KeyConfigs),
+    logbookKeyConfigs :: !(Maybe KeyConfigs),
+    anyKeyConfigs :: !(Maybe KeyConfigs)
+  }
 
-getArguments :: IO Arguments
-getArguments = runArgumentsParser <$> System.getArgs >>= handleParseResult
+instance HasCodec FileKeyConfigs where
+  codec =
+    object "FileKeyConfigs" $
+      FileKeyConfigs
+        <$> optionalFieldOrNull "empty" "Keybindings for when the file is empty"
+          .= emptyKeyConfigs
+        <*> optionalFieldOrNull "entry" "Keybindings for when an entry is selected"
+          .= entryKeyConfigs
+        <*> optionalFieldOrNull "header" "Keybindings for when an header is selected"
+          .= headerKeyConfigs
+        <*> optionalFieldOrNull "contents" "Keybindings for when an contents is selected"
+          .= contentsKeyConfigs
+        <*> optionalFieldOrNull "timestamps" "Keybindings for when a timestamps are selected"
+          .= timestampsKeyConfigs
+        <*> optionalFieldOrNull "properties" "Keybindings for when a properties are selected"
+          .= propertiesKeyConfigs
+        <*> optionalFieldOrNull "state-history" "Keybindings for when a state history is selected"
+          .= stateHistoryKeyConfigs
+        <*> optionalFieldOrNull "tags" "Keybindings for when a tags are selected"
+          .= tagsKeyConfigs
+        <*> optionalFieldOrNull "logbook" "Keybindings for when a logbook is selected"
+          .= logbookKeyConfigs
+        <*> optionalFieldOrNull "any" "Keybindings that match in any file subcontext"
+          .= anyKeyConfigs
 
-runArgumentsParser :: [String] -> ParserResult Arguments
-runArgumentsParser = execParserPure prefs_ argParser
-  where
-    prefs_ =
-      defaultPrefs
-        { prefShowHelpOnError = True,
-          prefShowHelpOnEmpty = True
-        }
+data BrowserKeyConfigs = BrowserKeyConfigs
+  { browserExistentKeyConfigs :: Maybe KeyConfigs,
+    browserInProgressKeyConfigs :: Maybe KeyConfigs,
+    browserEmptyKeyConfigs :: Maybe KeyConfigs,
+    browserFilterKeyConfigs :: Maybe KeyConfigs,
+    browserAnyKeyConfigs :: Maybe KeyConfigs
+  }
 
-argParser :: ParserInfo Arguments
-argParser = info (helper <*> parseArgs) help_
-  where
-    help_ = fullDesc <> progDescDoc (Just description)
-    description :: Doc
-    description =
-      Doc.vsep $
-        map Doc.text $
-          [ "",
-            "Smos TUI Editor version: " <> showVersion version,
-            ""
-          ]
-            ++ readWriteDataVersionsHelpMessage
+instance HasCodec BrowserKeyConfigs where
+  codec =
+    object "BrowserKeyConfigs" $
+      BrowserKeyConfigs
+        <$> optionalFieldOrNull "existent" "Keybindings for when an existing file or directory is selected"
+          .= browserExistentKeyConfigs
+        <*> optionalFieldOrNull "in-progress" "Keybindings for when an in-progress file or directory is selected"
+          .= browserInProgressKeyConfigs
+        <*> optionalFieldOrNull "empty" "Keybindings for when the directory being browsed is empty"
+          .= browserEmptyKeyConfigs
+        <*> optionalFieldOrNull "filter" "Keybindings for when file browser's filter bar is selected"
+          .= browserFilterKeyConfigs
+        <*> optionalFieldOrNull "any" "Keybindings for any of the other file browser situations"
+          .= browserAnyKeyConfigs
 
-parseArgs :: Parser Arguments
-parseArgs =
-  Arguments
-    <$> editParser
-    <*> Report.parseFlagsWithConfigFile parseFlags
+data ReportsKeyConfigs = ReportsKeyConfigs
+  { nextActionReportKeyConfigs :: Maybe NextActionReportKeyConfigs,
+    waitingReportKeyConfigs :: Maybe WaitingReportKeyConfigs,
+    ongoingReportKeyConfigs :: Maybe OngoingReportKeyConfigs,
+    timestampsReportKeyConfigs :: Maybe TimestampsReportKeyConfigs,
+    stuckReportKeyConfigs :: Maybe StuckReportKeyConfigs,
+    workReportKeyConfigs :: Maybe WorkReportKeyConfigs,
+    anyReportKeyConfigs :: Maybe KeyConfigs
+  }
 
-parseFlags :: Parser Flags
-parseFlags =
-  Flags
-    <$> Report.parseFlags
-    <*> optional (flag' True (mconcat [long "explainer-mode", help "Activate explainer mode to show what is happening"]))
+instance HasCodec ReportsKeyConfigs where
+  codec =
+    object "ReportsKeyConfigs" $
+      ReportsKeyConfigs
+        <$> optionalFieldOrNull "next-action" "Keybindings for the interactive next action report"
+          .= nextActionReportKeyConfigs
+        <*> optionalFieldOrNull "waiting" "Keybindings for the interactive waiting report"
+          .= waitingReportKeyConfigs
+        <*> optionalFieldOrNull "ongoing" "Keybindings for the interactive ongoing report"
+          .= ongoingReportKeyConfigs
+        <*> optionalFieldOrNull "timestamps" "Keybindings for the interactive timestamps report"
+          .= timestampsReportKeyConfigs
+        <*> optionalFieldOrNull "stuck" "Keybindings for the interactive stuck projects report"
+          .= stuckReportKeyConfigs
+        <*> optionalFieldOrNull "work" "Keybindings for the interactive work report"
+          .= workReportKeyConfigs
+        <*> optionalFieldOrNull "any" "Keybindings for at any point in any report"
+          .= anyReportKeyConfigs
+
+data NextActionReportKeyConfigs = NextActionReportKeyConfigs
+  { nextActionReportNormalKeyConfigs :: !(Maybe KeyConfigs),
+    nextActionReportSearchKeyConfigs :: !(Maybe KeyConfigs),
+    nextActionReportAnyKeyConfigs :: !(Maybe KeyConfigs)
+  }
+
+instance HasCodec NextActionReportKeyConfigs where
+  codec =
+    object "NextActionReportKeyConfigs" $
+      NextActionReportKeyConfigs
+        <$> optionalFieldOrNull "normal" "Keybindings for interacting with the next-action report"
+          .= nextActionReportNormalKeyConfigs
+        <*> optionalFieldOrNull "search" "Keybindings for the search in the next-action report"
+          .= nextActionReportSearchKeyConfigs
+        <*> optionalFieldOrNull "any" "Keybindings for at any point in the next-action report"
+          .= nextActionReportAnyKeyConfigs
+
+data WaitingReportKeyConfigs = WaitingReportKeyConfigs
+  { waitingReportNormalKeyConfigs :: !(Maybe KeyConfigs),
+    waitingReportSearchKeyConfigs :: !(Maybe KeyConfigs),
+    waitingReportAnyKeyConfigs :: !(Maybe KeyConfigs)
+  }
+
+instance HasCodec WaitingReportKeyConfigs where
+  codec =
+    object "WaitingReportKeyConfigs" $
+      WaitingReportKeyConfigs
+        <$> optionalFieldOrNull "normal" "Keybindings for interacting with the waiting report"
+          .= waitingReportNormalKeyConfigs
+        <*> optionalFieldOrNull "search" "Keybindings for the search in the waiting report"
+          .= waitingReportSearchKeyConfigs
+        <*> optionalFieldOrNull "any" "Keybindings for at any point in the waiting report"
+          .= waitingReportAnyKeyConfigs
+
+data OngoingReportKeyConfigs = OngoingReportKeyConfigs
+  { ongoingReportNormalKeyConfigs :: !(Maybe KeyConfigs),
+    ongoingReportSearchKeyConfigs :: !(Maybe KeyConfigs),
+    ongoingReportAnyKeyConfigs :: !(Maybe KeyConfigs)
+  }
+
+instance HasCodec OngoingReportKeyConfigs where
+  codec =
+    object "OngoingReportKeyConfigs" $
+      OngoingReportKeyConfigs
+        <$> optionalFieldOrNull "normal" "Keybindings for interacting with the ongoing report"
+          .= ongoingReportNormalKeyConfigs
+        <*> optionalFieldOrNull "search" "Keybindings for the search in the ongoing report"
+          .= ongoingReportSearchKeyConfigs
+        <*> optionalFieldOrNull "any" "Keybindings for at any point in the ongoing report"
+          .= ongoingReportAnyKeyConfigs
+
+data TimestampsReportKeyConfigs = TimestampsReportKeyConfigs
+  { timestampsReportNormalKeyConfigs :: !(Maybe KeyConfigs),
+    timestampsReportSearchKeyConfigs :: !(Maybe KeyConfigs),
+    timestampsReportAnyKeyConfigs :: !(Maybe KeyConfigs)
+  }
+
+instance HasCodec TimestampsReportKeyConfigs where
+  codec =
+    object "TimestampsReportKeyConfigs" $
+      TimestampsReportKeyConfigs
+        <$> optionalFieldOrNull "normal" "Keybindings for interacting with the timestamps report"
+          .= timestampsReportNormalKeyConfigs
+        <*> optionalFieldOrNull "search" "Keybindings for the search in the timestamps report"
+          .= timestampsReportSearchKeyConfigs
+        <*> optionalFieldOrNull "any" "Keybindings for at any point in the timestamps report"
+          .= timestampsReportAnyKeyConfigs
+
+data StuckReportKeyConfigs = StuckReportKeyConfigs
+  { stuckReportNormalKeyConfigs :: !(Maybe KeyConfigs),
+    stuckReportAnyKeyConfigs :: !(Maybe KeyConfigs)
+  }
+
+instance HasCodec StuckReportKeyConfigs where
+  codec =
+    object "StuckReportKeyConfigs" $
+      StuckReportKeyConfigs
+        <$> optionalFieldOrNull "normal" "Keybindings for interacting with the stuck report"
+          .= stuckReportNormalKeyConfigs
+        <*> optionalFieldOrNull "any" "Keybindings for at any point in the stuck report"
+          .= stuckReportAnyKeyConfigs
+
+data WorkReportKeyConfigs = WorkReportKeyConfigs
+  { workReportNormalKeyConfigs :: !(Maybe KeyConfigs),
+    workReportSearchKeyConfigs :: !(Maybe KeyConfigs),
+    workReportAnyKeyConfigs :: !(Maybe KeyConfigs)
+  }
+
+instance HasCodec WorkReportKeyConfigs where
+  codec =
+    object "WorkReportKeyConfigs" $
+      WorkReportKeyConfigs
+        <$> optionalFieldOrNull "normal" "Keybindings for interacting with the work report"
+          .= workReportNormalKeyConfigs
+        <*> optionalFieldOrNull "search" "Keybindings for the search in the work report"
+          .= workReportSearchKeyConfigs
+        <*> optionalFieldOrNull "any" "Keybindings for at any point in the work report"
+          .= workReportAnyKeyConfigs
+
+data HelpKeyConfigs = HelpKeyConfigs
+  { helpHelpKeyConfigs :: !(Maybe KeyConfigs),
+    helpSearchKeyConfigs :: !(Maybe KeyConfigs),
+    helpAnyKeyConfigs :: !(Maybe KeyConfigs)
+  }
+
+instance HasCodec HelpKeyConfigs where
+  codec =
+    object "HelpKeyConfigs" $
+      HelpKeyConfigs
+        <$> optionalFieldOrNull "help" "Keybindings for when in the help screen"
+          .= helpHelpKeyConfigs
+        <*> optionalFieldOrNull "search" "Keybindings for when the search bar is selected within the help screen"
+          .= helpSearchKeyConfigs
+        <*> optionalFieldOrNull "any" "Keybindings for at any time in the help screen"
+          .= helpAnyKeyConfigs
+
+newtype KeyConfigs = KeyConfigs
+  { keyConfigs :: [KeyConfig]
+  }
+
+instance HasCodec KeyConfigs where
+  codec = named "KeyConfigs" $ dimapCodec KeyConfigs keyConfigs codec
+
+data KeyConfig = KeyConfig
+  { keyConfigMatcher :: !MatcherConfig,
+    keyConfigAction :: !ActionName
+  }
+
+instance HasCodec KeyConfig where
+  codec =
+    named "KeyConfig" $
+      object "KeyConfig" $
+        KeyConfig
+          <$> requiredField "key" "The key to match"
+            .= keyConfigMatcher
+          <*> requiredField "action" "The name of the action to perform when the key is matched"
+            .= keyConfigAction
+
+data Settings = Settings
+  { settingKeybindings :: Maybe KeybindingsConfiguration,
+    settingReportSettings :: !Report.ReportSettings,
+    settingExplainerMode :: !(Maybe Bool),
+    settingSandboxMode :: !(Maybe Bool)
+  }
+
+instance HasParser Settings where
+  settingsParser = parseSettings
+
+{-# ANN parseSettings ("NOCOVER" :: String) #-}
+parseSettings :: OptEnvConf.Parser Settings
+parseSettings = do
+  settingKeybindings <- optional settingsParser
+  settingReportSettings <- settingsParser
+  settingExplainerMode <-
+    optional $
+      setting
+        [ help "Activate explainer mode to show what is happening",
+          switch True,
+          value False,
+          reader exists,
+          long "explainer-mode",
+          conf "explainer-mode",
+          env "EXPLAINER_MODE",
+          metavar "ANY"
+        ]
+  settingSandboxMode <-
+    optional $
+      setting
+        [ help "Activate sandbox mode to ensure that smos can only edit smos files",
+          switch True,
+          value False,
+          reader exists,
+          long "explainer-mode",
+          conf "explainer-mode",
+          env "EXPLAINER_MODE",
+          metavar "ANY"
+        ]
+
+  pure Settings {..}
+
+data Instructions
+  = Instructions (Maybe StartingPath) Settings
+
+instance HasParser Instructions where
+  settingsParser =
+    withSmosConfig $
+      Instructions
+        <$> optional settingsParser
+        <*> settingsParser
+
+data CombineError
+  = ActionNotFound ActionName
+  | ActionWrongType ActionName
+
+data Comb a
+  = Combined a
+  | CombErr [CombineError]
+
+instance Functor Comb where
+  fmap f (Combined a) = Combined (f a)
+  fmap _ (CombErr errs) = CombErr errs
+
+instance Applicative Comb where
+  pure = Combined
+  cfa <*> ca =
+    case (cfa, ca) of
+      (Combined f, Combined a) -> Combined (f a)
+      (CombErr err1, CombErr err2) -> CombErr $ err1 ++ err2
+      (CombErr err1, _) -> CombErr err1
+      (_, CombErr err2) -> CombErr err2

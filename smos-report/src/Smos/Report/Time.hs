@@ -10,7 +10,6 @@ import Control.Arrow
 import Control.DeepSeq
 import Data.Aeson
 import Data.Function
-import Data.Hashable
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time (NominalDiffTime)
@@ -18,6 +17,7 @@ import Data.Validity
 import Data.Void
 import GHC.Generics (Generic)
 import Numeric.Natural
+import OptEnvConf
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer (decimal)
@@ -34,8 +34,6 @@ data Time
   deriving (ToJSON, FromJSON) via (Autodocodec Time)
 
 instance Validity Time
-
-instance Hashable Time
 
 instance NFData Time
 
@@ -75,6 +73,17 @@ instance HasCodec Time where
         Right w -> Days w
       g = Left
 
+instance HasParser Time where
+  settingsParser =
+    setting
+      [ help "A filter to filter by time",
+        argument,
+        reader $ eitherReader (parseTime . T.pack),
+        env "TIME",
+        conf "time",
+        metavar "TIME_FILTER"
+      ]
+
 type P = Parsec Void Text
 
 timeSeconds :: Time -> Natural
@@ -101,7 +110,7 @@ timeP :: P Time
 timeP = do
   i <- decimal
   space
-  c <- many asciiChar
+  c <- Text.Megaparsec.many asciiChar
   case c of
     "s" -> pure $ Seconds i
     "sec" -> pure $ Seconds i

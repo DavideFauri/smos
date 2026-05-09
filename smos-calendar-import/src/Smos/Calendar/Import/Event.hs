@@ -7,7 +7,6 @@
 module Smos.Calendar.Import.Event where
 
 import Autodocodec
-import Control.Applicative
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Maybe
 import Data.Set (Set)
@@ -33,7 +32,7 @@ instance HasCodec Events where
       eitherCodec
         ( object "Events" $
             Events
-              <$> staticObjectCodec .= eventsStatic
+              <$> objectCodec .= eventsStatic
               <*> optionalFieldWithOmittedDefault' "events" S.empty .= events
         )
         codec

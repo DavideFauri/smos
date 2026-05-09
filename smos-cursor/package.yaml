@@ -1,5 +1,5 @@
 name: smos-cursor
-version: 0.5.0
+version: 0.7.0
 github: NorfairKing/smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
@@ -25,5 +25,6 @@ library:
   - smos-data
   - text
   - time
+  - tz
   - validity
   - validity-time

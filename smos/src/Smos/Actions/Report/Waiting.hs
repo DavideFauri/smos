@@ -4,9 +4,10 @@ module Smos.Actions.Report.Waiting where
 
 import Smos.Actions.File
 import Smos.Actions.Utils
-import Smos.Report.Archive
-import Smos.Report.Config
-import Smos.Report.ShouldPrint
+import Smos.Directory.Archive
+import Smos.Directory.Resolution
+import Smos.Directory.ShouldPrint
+import Smos.Report.OptParse
 import Smos.Types
 
 allPlainReportWaitingActions :: [Action]
@@ -35,7 +36,7 @@ reportWaiting =
     { actionName = "reportWaiting",
       actionFunc = modifyEditorCursorS $ \ec -> do
         saveCurrentSmosFile
-        dc <- asks $ smosReportConfigDirectoryConfig . configReportConfig
+        dc <- asks $ reportSettingDirectorySettings . configReportSettings
         narc <- liftIO $ produceWaitingReportCursor Nothing HideArchive DontPrint dc
         pure $
           ec
@@ -86,7 +87,7 @@ enterWaitingFile =
         case editorCursorReportCursor $ smosStateCursor ss of
           Just rc -> case rc of
             ReportWaiting wrc -> do
-              dc <- asks $ smosReportConfigDirectoryConfig . configReportConfig
+              dc <- asks $ reportSettingDirectorySettings . configReportSettings
               wd <- liftIO $ resolveDirWorkflowDir dc
               case waitingReportCursorBuildSmosFileCursor wd wrc of
                 Nothing -> pure ()

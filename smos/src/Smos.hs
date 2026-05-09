@@ -5,6 +5,7 @@ module Smos
     smosWithoutRuntimeConfig,
     startSmosOn,
     startSmosWithVtyBuilderOn,
+    module Smos.Report.OptParse,
     module Smos.Config,
   )
 where
@@ -14,20 +15,23 @@ import Brick.Main as Brick
 import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Monad.Trans.Resource (withInternalState)
-import Graphics.Vty as Vty (Vty, defaultConfig, mkVty, setWindowTitle)
-import Import
+import Data.Maybe
+import Graphics.Vty as Vty (Vty, defaultConfig, setWindowTitle)
+import Graphics.Vty.CrossPlatform (mkVty)
 import Smos.Actions.File
 import Smos.App
 import Smos.Config
 import Smos.Cursor.SmosFileEditor
+import Smos.Directory.Resolution
 import Smos.OptParse
 import Smos.OptParse.Bare
+import Smos.Report.OptParse
 import Smos.Types
 import UnliftIO.Resource
 
 smos :: SmosConfig -> IO ()
 smos sc = do
-  Instructions mst sc' <- getInstructions sc
+  (mst, sc') <- getInstructions sc
   startSmosOn mst sc'
 
 smosWithoutRuntimeConfig :: SmosConfig -> IO ()
@@ -46,13 +50,14 @@ startSmosOn mst = startSmosWithVtyBuilderOn vtyBuilder mst
 startSmosWithVtyBuilderOn :: IO Vty.Vty -> Maybe StartingPath -> SmosConfig -> IO ()
 startSmosWithVtyBuilderOn vtyBuilder mst sc@SmosConfig {..} = runResourceT $ do
   st <- liftIO $ case mst of
-    Nothing -> StartingDir <$> resolveReportWorkflowDir configReportConfig
+    Nothing -> StartingDir <$> resolveDirWorkflowDir (reportSettingDirectorySettings configReportSettings)
     Just st -> pure st
   s <- buildInitialState st
   withInternalState $ \res -> do
     chan <- Brick.newBChan maxBound
     initialVty <- vtyBuilder
-    workflowDir <- resolveReportWorkflowDir configReportConfig
+    workflowDir <- resolveDirWorkflowDir (reportSettingDirectorySettings configReportSettings)
+
     Left s' <-
       race
         (Brick.customMain initialVty vtyBuilder (Just chan) (mkSmosApp res workflowDir sc) s)

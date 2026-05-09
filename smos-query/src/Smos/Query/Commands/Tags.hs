@@ -15,10 +15,10 @@ smosQueryTags :: TagsSettings -> Q ()
 smosQueryTags TagsSettings {..} = do
   es <-
     sourceToList $
-      streamSmosFiles HideArchive
+      streamSmosFiles tagsSetHideArchive
         .| streamParseSmosFiles
         .| smosFileCursors
-        .| smosMFilter tagsSetFilter
+        .| mFilterConduit tagsSetFilter
         .| smosCursorCurrents
         .| C.map snd
   let tagsReport = makeTagsReport es

@@ -3,12 +3,14 @@
 module Smos.Actions.Report.Timestamps where
 
 import Data.Time
+import Data.Time.Zones
 import Smos.Actions.File
 import Smos.Actions.Utils
-import Smos.Report.Archive
-import Smos.Report.Config
+import Smos.Directory.Archive
+import Smos.Directory.Resolution
+import Smos.Directory.ShouldPrint
+import Smos.Report.OptParse
 import Smos.Report.Period
-import Smos.Report.ShouldPrint
 import Smos.Types
 
 allPlainReportTimestampsActions :: [Action]
@@ -37,9 +39,11 @@ reportTimestamps =
     { actionName = "reportTimestamps",
       actionFunc = modifyEditorCursorS $ \ec -> do
         saveCurrentSmosFile
-        dc <- asks $ smosReportConfigDirectoryConfig . configReportConfig
-        now <- liftIO getZonedTime
-        narc <- liftIO $ produceTimestampsReportCursor now Today Nothing HideArchive DontPrint dc
+        dc <- asks $ reportSettingDirectorySettings . configReportSettings
+        zone <- liftIO loadLocalTZ
+        now <- liftIO getCurrentTime
+        let today = localDay $ utcToLocalTimeTZ zone now
+        narc <- liftIO $ produceTimestampsReportCursor today Today Nothing HideArchive DontPrint dc
         pure $
           ec
             { editorCursorSelection = ReportSelected,
@@ -89,7 +93,7 @@ enterTimestampsFile =
         case editorCursorReportCursor $ smosStateCursor ss of
           Just rc -> case rc of
             ReportTimestamps wrc -> do
-              dc <- asks $ smosReportConfigDirectoryConfig . configReportConfig
+              dc <- asks $ reportSettingDirectorySettings . configReportSettings
               wd <- liftIO $ resolveDirWorkflowDir dc
               case timestampsReportCursorBuildSmosFileCursor wd wrc of
                 Nothing -> pure ()

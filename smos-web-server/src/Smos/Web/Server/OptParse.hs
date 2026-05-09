@@ -1,201 +1,95 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Smos.Web.Server.OptParse
-  ( module Smos.Web.Server.OptParse,
-    module Smos.Web.Server.OptParse.Types,
+  ( Settings (..),
+    getSettings,
   )
 where
 
-import Autodocodec.Yaml
-import Control.Arrow (left)
 import Control.Monad.Logger
-import Data.Maybe
-import qualified Data.Text as T
-import Data.Version
-import qualified Env
-import Options.Applicative
-import Options.Applicative.Help.Pretty as Doc
-import Path.IO
-import Paths_smos_web_server
+import Data.Text (Text)
+import OptEnvConf
+import Paths_smos_web_server (version)
 import Servant.Client
+import Smos.CLI.OptParse ()
 import Smos.Client
-import Smos.Web.Server.OptParse.Types
-import qualified System.Environment as System
-import System.Exit
+import Smos.Data
 
 getSettings :: IO Settings
-getSettings = do
-  flags <- getFlags
-  env <- getEnvironment
-  config <- getConfiguration flags env
-  combineToSettings flags env config
+getSettings =
+  runSettingsParser version $
+    unlines $
+      concat
+        [ ["Smos' web server", ""],
+          readWriteDataVersionsHelpMessage,
+          clientVersionsHelpMessage
+        ]
 
-combineToSettings :: Flags -> Environment -> Maybe Configuration -> IO Settings
-combineToSettings Flags {..} Environment {..} mConf = do
-  let mc :: (Configuration -> Maybe a) -> Maybe a
-      mc func = mConf >>= func
-  let settingLogLevel = fromMaybe LevelInfo $ flagLogLevel <|> envLogLevel <|> mc confLogLevel
-  let settingPort = fromMaybe 8000 $ flagPort <|> envPort <|> mc confPort
-  settingAPIUrl <- case flagAPIUrl <|> envAPIUrl <|> mc confAPIUrl of
-    Nothing -> die "No API configured."
-    Just url -> parseBaseUrl url
-  settingWebUrl <- case flagWebUrl <|> envWebUrl <|> mc confWebUrl of
-    Nothing -> die "No web url configured."
-    Just url -> parseBaseUrl url
-  settingDocsUrl <- mapM parseBaseUrl $ flagDocsUrl <|> envDocsUrl <|> mc confDocsUrl
-  settingDataDir <- case flagDataDir <|> envDataDir <|> mc confDataDir of
-    Nothing -> getCurrentDir
-    Just dd -> resolveDir' dd
-  let settingGoogleAnalyticsTracking = T.pack <$> (flagGoogleAnalyticsTracking <|> envGoogleAnalyticsTracking <|> mc confGoogleAnalyticsTracking)
-  let settingGoogleSearchConsoleVerification = T.pack <$> (flagGoogleSearchConsoleVerification <|> envGoogleSearchConsoleVerification <|> mc confGoogleSearchConsoleVerification)
-  pure Settings {..}
+data Settings = Settings
+  { settingLogLevel :: !LogLevel,
+    settingPort :: !Int,
+    settingDocsUrl :: !(Maybe BaseUrl),
+    settingAPIUrl :: !BaseUrl,
+    settingWebUrl :: !BaseUrl,
+    settingGoogleAnalyticsTracking :: !(Maybe Text),
+    settingGoogleSearchConsoleVerification :: !(Maybe Text)
+  }
+  deriving (Show)
 
-getEnvironment :: IO Environment
-getEnvironment = Env.parse (Env.header "Environment") prefixedEnvironmentParser
+instance HasParser Settings where
+  settingsParser = parseSettings
 
-prefixedEnvironmentParser :: Env.Parser Env.Error Environment
-prefixedEnvironmentParser =
-  Env.prefixed
-    "SMOS_WEB_SERVER_"
-    environmentParser
-
-environmentParser :: Env.Parser Env.Error Environment
-environmentParser =
-  Environment
-    <$> optional (Env.var Env.str "CONFIG_FILE" (Env.help "The config file"))
-    <*> optional (Env.var (left Env.UnreadError . parseLogLevel) "LOG_LEVEL" (Env.help "The minimal severity of log messages"))
-    <*> optional (Env.var Env.auto "PORT" (Env.help "The port to serve web requests on"))
-    <*> optional (Env.var Env.str "DOCS_URL" (Env.help "The url to the docs site to refer to"))
-    <*> optional (Env.var Env.str "API_URL" (Env.help "The url for the api to use"))
-    <*> optional (Env.var Env.str "WEB_URL" (Env.help "The url that this web server is served from"))
-    <*> optional (Env.var Env.str "DATA_DIR" (Env.help "The directory to store workflows during editing"))
-    <*> optional (Env.var Env.str "GOOGLE_ANALYTICS_TRACKING" (Env.help "The Google analytics tracking code"))
-    <*> optional (Env.var Env.str "GOOGLE_SEARCH_CONSOLE_VERIFICATION" (Env.help "The Google search console verification code"))
-
-getConfiguration :: Flags -> Environment -> IO (Maybe Configuration)
-getConfiguration Flags {..} Environment {..} =
-  case flagConfigFile <|> envConfigFile of
-    Nothing -> pure Nothing
-    Just cf -> resolveFile' cf >>= readYamlConfigFile
-
-getFlags :: IO Flags
-getFlags = do
-  args <- System.getArgs
-  let result = runFlagsParser args
-  handleParseResult result
-
-runFlagsParser :: [String] -> ParserResult Flags
-runFlagsParser = execParserPure prefs_ argParser
-  where
-    prefs_ =
-      defaultPrefs
-        { prefShowHelpOnError = True,
-          prefShowHelpOnEmpty = True
-        }
-
-argParser :: ParserInfo Flags
-argParser = info (helper <*> parseArgs) help_
-  where
-    help_ = fullDesc <> progDescDoc (Just description)
-    description :: Doc
-    description =
-      Doc.vsep $
-        map Doc.text $
-          concat
-            [ [ "",
-                "Smos Web Server version: " <> showVersion version,
-                ""
-              ],
-              clientVersionsHelpMessage
-            ]
-
-parseArgs :: Parser Flags
-parseArgs =
-  Flags
-    <$> optional
-      ( strOption
-          ( mconcat
-              [ long "config-file",
-                metavar "FILEPATH",
-                help "The config file"
-              ]
-          )
-      )
-      <*> optional
-        ( option
-            (eitherReader parseLogLevel)
-            ( mconcat
-                [ long "web-log-level",
-                  help $
-                    unwords
-                      [ "The log level to use, options:",
-                        show $ map renderLogLevel [LevelDebug, LevelInfo, LevelWarn, LevelError]
-                      ]
-                ]
-            )
-        )
-      <*> optional
-        ( option
-            auto
-            ( mconcat
-                [ long "web-port",
-                  metavar "PORT",
-                  help "The port to serve web requests on"
-                ]
-            )
-        )
-      <*> optional
-        ( strOption
-            ( mconcat
-                [ long "docs-url",
-                  metavar "URL",
-                  help "The url to the docs site to refer to"
-                ]
-            )
-        )
-      <*> optional
-        ( strOption
-            ( mconcat
-                [ long "api-url",
-                  metavar "URL",
-                  help "The url for the api to use"
-                ]
-            )
-        )
-      <*> optional
-        ( strOption
-            ( mconcat
-                [ long "web-url",
-                  metavar "URL",
-                  help "The url that this web server is served from"
-                ]
-            )
-        )
-      <*> optional
-        ( strOption
-            ( mconcat
-                [ long "data-dir",
-                  metavar "FILEPATH",
-                  help "The directory to store workflows during editing"
-                ]
-            )
-        )
-      <*> optional
-        ( strOption
-            ( mconcat
-                [ long "google-analytics-tracking",
-                  metavar "CODE",
-                  help "The Google analytics tracking code"
-                ]
-            )
-        )
-      <*> optional
-        ( strOption
-            ( mconcat
-                [ long "google-search-console-verification",
-                  metavar "CODE",
-                  help "The Google search console verification code"
-                ]
-            )
-        )
+{-# ANN parseSettings ("NOCOVER" :: String) #-}
+parseSettings :: OptEnvConf.Parser Settings
+parseSettings = subEnv_ "smos-web-server" $
+  withLocalYamlConfig $ do
+    settingLogLevel <- settingsParser
+    settingPort <-
+      setting
+        [ help "The port to serve web requests on",
+          reader auto,
+          name "port",
+          value 8080,
+          metavar "PORT"
+        ]
+    settingDocsUrl <-
+      optional $
+        setting
+          [ help "The url to the docs site to refer to",
+            reader $ maybeReader parseBaseUrl,
+            name "docs-url",
+            metavar "URL"
+          ]
+    settingAPIUrl <-
+      setting
+        [ help "The url for the api to use",
+          reader $ maybeReader parseBaseUrl,
+          name "api-url",
+          metavar "URL"
+        ]
+    settingWebUrl <-
+      setting
+        [ help "The url that this web server is served from",
+          reader $ maybeReader parseBaseUrl,
+          name "web-url",
+          metavar "URL"
+        ]
+    settingGoogleAnalyticsTracking <-
+      optional $
+        setting
+          [ help "The Google analytics tracking code",
+            reader str,
+            name "google-analytics-tracking",
+            metavar "CODE"
+          ]
+    settingGoogleSearchConsoleVerification <-
+      optional $
+        setting
+          [ help "The Google search console verification code",
+            reader str,
+            name "google-search-console-verification",
+            metavar "CODE"
+          ]
+    pure Settings {..}

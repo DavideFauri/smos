@@ -12,7 +12,6 @@ import qualified Data.Aeson.Encode.Pretty as JSON
 import qualified Data.ByteString as SB
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.Conduit.List as C
-import Data.Foldable
 import qualified Data.Text as T
 import Data.Tree
 import Data.Validity.Path ()
@@ -20,22 +19,26 @@ import qualified Data.Yaml.Builder as Yaml
 import Smos.Query.Clock.Types
 import Smos.Query.Commands.Import
 import Smos.Report.Clock
+import Smos.Report.Period
 import Smos.Report.TimeBlock
 import Text.Printf
 
 smosQueryClock :: ClockSettings -> Q ()
 smosQueryClock ClockSettings {..} = do
-  now <- liftIO getZonedTime
+  zone <- liftIO loadLocalTZ
+  now <- liftIO getCurrentTime
+  let today = localDay (utcToLocalTimeTZ zone now)
   tups <-
     sourceToList $
-      streamSmosFiles clockSetHideArchive .| streamParseSmosFiles
+      streamSmosFiles clockSetHideArchive
+        .| streamParseSmosFiles
         .| ( case clockSetFilter of
                Nothing -> C.map id
                Just f -> C.map (\(rp, sf) -> (,) rp (zeroOutByFilter f rp sf))
            )
-        .| C.mapMaybe (uncurry (findFileTimes $ zonedTimeToUTC now))
-        .| C.mapMaybe (trimFileTimes now clockSetPeriod)
-  let clockTable = makeClockTable $ divideIntoClockTimeBlocks now clockSetBlock tups
+        .| C.mapMaybe (uncurry (findFileTimes now))
+        .| C.mapMaybe (trimFileTimes zone (periodInterval today clockSetPeriod))
+  let clockTable = makeClockTable $ divideIntoClockTimeBlocks zone clockSetBlock tups
   out <- asks envOutputHandle
   case clockSetOutputFormat of
     OutputPretty -> do
@@ -69,8 +72,8 @@ clockTableRows ctbs =
         goHF l = concatMap $ goHT l
         goHT :: Int -> Tree ClockTableHeaderEntry -> [ClockTableRow]
         goHT l t@(Node ClockTableHeaderEntry {..} f) =
-          EntryRow l clockTableHeaderEntryHeader clockTableHeaderEntryTime (sumTree t) :
-          goHF (l + 1) f
+          EntryRow l clockTableHeaderEntryHeader clockTableHeaderEntryTime (sumTree t)
+            : goHF (l + 1) f
     sumTable :: ClockTable -> NominalDiffTime
     sumTable = sumDiffTimes . map sumBlock
     sumBlock :: ClockTableBlock -> NominalDiffTime

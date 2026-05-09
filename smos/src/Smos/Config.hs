@@ -19,6 +19,7 @@ module Smos.Config
     ReportsKeyMap (..),
     NextActionReportKeyMap (..),
     WaitingReportKeyMap (..),
+    OngoingReportKeyMap (..),
     TimestampsReportKeyMap (..),
     StuckReportKeyMap (..),
     WorkReportKeyMap (..),
@@ -28,8 +29,6 @@ module Smos.Config
     ActionUsing (..),
     quit,
     module Graphics.Vty.Input.Events,
-    -- Report config
-    module Smos.Report.Config,
   )
 where
 
@@ -37,7 +36,6 @@ import Data.Map (Map)
 import Graphics.Vty.Input.Events (Key (..), Modifier (..))
 import Smos.Actions
 import Smos.Keys
-import Smos.Report.Config
 import Smos.Types
 
 listMatchers :: [KeyMapping] -> KeyMappings

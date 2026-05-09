@@ -1,0 +1,48 @@
+name: smos-cli
+version: 0.2.1
+category: Smos
+author: Tom Sydney Kerckhove
+maintainer: syd@cs-syd.eu
+license: MIT
+
+dependencies:
+- base
+
+library:
+  source-dirs: src/
+  ghc-options: -Wall
+  dependencies:
+  - autodocodec
+  - bytestring
+  - http-client
+  - http-types
+  - monad-logger
+  - opt-env-conf
+  - path
+  - path-io
+  - pretty-show
+  - retry
+  - safe-coloured-text
+  - safe-coloured-text-layout
+  - servant-client
+  - smos-data
+  - text
+  - time
+  - unliftio
+  - validity
+
+tests:
+  smos-cli-test:
+    main: Spec.hs
+    source-dirs: test
+    build-tools: sydtest-discover
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -Wall
+    dependencies:
+    - genvalidity-sydtest
+    - genvalidity-text
+    - smos-cli
+    - sydtest

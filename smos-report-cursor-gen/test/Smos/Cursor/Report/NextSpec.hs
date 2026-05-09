@@ -4,10 +4,10 @@ module Smos.Cursor.Report.NextSpec where
 
 import Smos.Cursor.Report.Next
 import Smos.Cursor.Report.Next.Gen ()
-import Smos.Report.Archive.Gen ()
+import Smos.Directory.Archive.Gen ()
+import Smos.Directory.ShouldPrint
+import Smos.Directory.TestUtils
 import Smos.Report.Filter.Gen ()
-import Smos.Report.ShouldPrint
-import Smos.Report.TestUtils
 import Test.Syd
 import Test.Syd.Validity
 import Test.Syd.Validity.Lens

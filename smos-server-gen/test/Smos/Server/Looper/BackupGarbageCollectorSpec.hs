@@ -3,13 +3,13 @@ module Smos.Server.Looper.BackupGarbageCollectorSpec where
 import Control.Monad
 import Control.Monad.State.Strict
 import Data.GenValidity.Persist ()
+import Data.GenValidity.Time ()
 import Data.Int
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Time
 import Database.Persist.Sql
 import Smos.Server.DB
-import Smos.Server.Gen ()
 import Smos.Server.Looper.BackupGarbageCollector
 import Test.Syd
 import Test.Syd.Validity
@@ -123,7 +123,6 @@ data S = S
     sNextBackupId :: !BackupId,
     sBackups :: !(Set (BackupId, UTCTime))
   }
-  deriving (Show)
 
 beginState :: Day -> S
 beginState d =
@@ -174,7 +173,8 @@ iterationSpec = do
   it "works with iterations when keeping 3 backups in the last 3 days" $ do
     let endState =
           flip execState (beginState (fromGregorian 2022 01 30)) $
-            replicateM_ 9 $ iteration nominalDay [(nominalDay * 3, 3)]
+            replicateM_ 9 $
+              iteration nominalDay [(nominalDay * 3, 3)]
     let b :: Int64 -> Int -> (BackupId, UTCTime)
         b i d = (toSqlKey i, UTCTime (fromGregorian 2022 02 d) 0)
     sBackups endState

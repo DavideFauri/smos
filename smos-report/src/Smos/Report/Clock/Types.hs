@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -6,14 +5,13 @@
 module Smos.Report.Clock.Types where
 
 import Autodocodec
-import Data.Aeson (FromJSON, ToJSON)
+import Autodocodec.Yaml.Encode
+import Data.Aeson (ToJSON)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Text (Text)
 import Data.Time
-import Data.Validity
-import Data.Validity.Path ()
 import Data.Yaml.Builder (ToYaml)
-import GHC.Generics (Generic)
+import OptEnvConf
 import Path
 import Smos.Data
 import Smos.Report.TimeBlock
@@ -23,39 +21,96 @@ data TemporalClockResolution
   = TemporalSecondsResolution
   | TemporalMinutesResolution
   | TemporalHoursResolution
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Eq, Ord)
 
-instance Validity TemporalClockResolution
-
-instance ToJSON TemporalClockResolution
+instance HasParser TemporalClockResolution where
+  settingsParser =
+    choice
+      [ setting
+          [ help "Show clocks in seconds",
+            switch TemporalSecondsResolution,
+            long "seconds"
+          ],
+        setting
+          [ help "Show clocks in minutes",
+            switch TemporalMinutesResolution,
+            long "minutes"
+          ],
+        setting
+          [ help "Show clocks in hours",
+            switch TemporalHoursResolution,
+            long "hours"
+          ]
+      ]
 
 data DecimalClockResolution
   = DecimalHoursResolution
   | DecimalQuarterResolution
   | DecimalResolution Word -- Number of significant digits
-  deriving (Show, Eq, Ord, Generic)
 
-instance Validity DecimalClockResolution
-
-instance ToJSON DecimalClockResolution
+instance HasParser DecimalClockResolution where
+  settingsParser =
+    choice
+      [ setting
+          [ help "Show clocks in a decimal number of hours",
+            switch DecimalHoursResolution,
+            long "hours"
+          ],
+        setting
+          [ help "Show clocks in a decimal number of quarter hours",
+            switch DecimalQuarterResolution,
+            long "quarters"
+          ],
+        setting
+          [ help "Show clocks in a decimal manner, with this many decimals",
+            option,
+            reader $ DecimalResolution <$> auto,
+            long "decimals",
+            metavar "DIGITS"
+          ]
+      ]
 
 data ClockFormat
   = ClockFormatTemporal TemporalClockResolution
   | ClockFormatDecimal DecimalClockResolution
-  deriving (Show, Eq, Ord, Generic)
 
-instance Validity ClockFormat
-
-instance ToJSON ClockFormat
+instance HasParser ClockFormat where
+  settingsParser =
+    withShownDefault (const "minutes") (ClockFormatTemporal TemporalMinutesResolution) $
+      choice
+        [ setting
+            [ help "Show the clocks with a temporal resolution (hours and minutes)",
+              switch (),
+              long "temporal"
+            ]
+            *> (ClockFormatTemporal <$> withShownDefault (const "minutes") TemporalMinutesResolution settingsParser),
+          setting
+            [ help "Show the clocks with a decimal resolution (hours and tenths of hours)",
+              switch (),
+              long "decimal"
+            ]
+            *> (ClockFormatDecimal <$> withShownDefault (const "2") (DecimalResolution 2) settingsParser)
+        ]
 
 data ClockReportStyle
   = ClockForest
   | ClockFlat
-  deriving (Show, Eq, Ord, Generic)
 
-instance Validity ClockReportStyle
-
-instance ToJSON ClockReportStyle
+instance HasParser ClockReportStyle where
+  settingsParser =
+    withShownDefault (const "forest") ClockForest $
+      choice
+        [ setting
+            [ help "Show the clocks as a forest",
+              switch ClockForest,
+              long "forest"
+            ],
+          setting
+            [ help "Show the clocks line by line",
+              switch ClockFlat,
+              long "flat"
+            ]
+        ]
 
 type ClockTable = [ClockTableBlock]
 
@@ -65,10 +120,8 @@ data ClockTableFile = ClockTableFile
   { clockTableFile :: Path Rel File,
     clockTableForest :: Forest ClockTableHeaderEntry
   }
-  deriving stock (Show, Eq, Generic)
-  deriving (ToJSON, FromJSON, ToYaml) via (Autodocodec ClockTableFile)
-
-instance Validity ClockTableFile
+  deriving (ToJSON) via (Autodocodec ClockTableFile)
+  deriving (ToYaml) via (AutodocodecYaml ClockTableFile)
 
 instance HasCodec ClockTableFile where
   codec =
@@ -81,10 +134,7 @@ data ClockTableHeaderEntry = ClockTableHeaderEntry
   { clockTableHeaderEntryHeader :: Header,
     clockTableHeaderEntryTime :: NominalDiffTime
   }
-  deriving stock (Show, Eq, Generic)
-  deriving (ToJSON, FromJSON, ToYaml) via (Autodocodec ClockTableHeaderEntry)
-
-instance Validity ClockTableHeaderEntry
+  deriving stock (Eq)
 
 instance HasCodec ClockTableHeaderEntry where
   codec =
@@ -100,17 +150,14 @@ data FileTimes = FileTimes
   { clockTimeFile :: Path Rel File,
     clockTimeForest :: TForest HeaderTimes
   }
-  deriving (Generic)
 
 data HeaderTimes f = HeaderTimes
   { headerTimesHeader :: Header,
     headerTimesEntries :: f LogbookEntry
   }
-  deriving (Generic)
 
 type TForest a = NonEmpty (TTree a)
 
 data TTree a
   = TLeaf (a NonEmpty)
   | TBranch (a []) (TForest a)
-  deriving (Generic)

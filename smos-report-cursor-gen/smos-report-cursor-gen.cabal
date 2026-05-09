@@ -1,11 +1,11 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.7.
+-- This file has been generated from package.yaml by hpack version 0.38.3.
 --
 -- see: https://github.com/sol/hpack
 
 name:           smos-report-cursor-gen
-version:        0.2.0
+version:        0.4.0
 category:       Smos
 author:         Tom Sydney Kerckhove
 maintainer:     syd@cs-syd.eu
@@ -16,6 +16,7 @@ library
   exposed-modules:
       Smos.Cursor.Report.Entry.Gen
       Smos.Cursor.Report.Next.Gen
+      Smos.Cursor.Report.Ongoing.Gen
       Smos.Cursor.Report.Stuck.Gen
       Smos.Cursor.Report.Timestamps.Gen
       Smos.Cursor.Report.Waiting.Gen
@@ -48,6 +49,7 @@ test-suite smos-report-cursor-test
   other-modules:
       Smos.Cursor.Report.EntrySpec
       Smos.Cursor.Report.NextSpec
+      Smos.Cursor.Report.OngoingSpec
       Smos.Cursor.Report.StuckSpec
       Smos.Cursor.Report.TimestampsSpec
       Smos.Cursor.Report.WaitingSpec
@@ -64,7 +66,8 @@ test-suite smos-report-cursor-test
     , genvalidity-sydtest
     , genvalidity-sydtest-lens
     , smos-data-gen
-    , smos-report
+    , smos-directory
+    , smos-directory-gen
     , smos-report-cursor
     , smos-report-cursor-gen
     , smos-report-gen

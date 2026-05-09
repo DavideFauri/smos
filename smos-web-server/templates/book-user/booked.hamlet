@@ -1,0 +1,58 @@
+<section .section>
+  <div .container>
+    <div .box>
+      <h3 .title .is-3>
+        Booking prepared: Action required
+
+
+      <div .block>
+        <p>
+          <b>
+            In order to create this booking, your need to click 'RSVP Yes' in the email that was just sent to you, and add the event to your calendar.
+        <p>
+          Until then, the booking will remain unfinished.
+
+        <p>
+          Once the booking has been created, #{bookingSettingName} will be able to confirm it by doing the same on their end.
+
+      <h4 .title .is-4>
+        Meeting Details
+
+      <div .block>
+        <p>
+          Duration: #{show bookingDuration} minutes
+
+        <br>
+        
+        <p>
+          For #{bookingClientName} (#{bookingClientEmailAddress}):
+        <p>
+          #{formatTime defaultTimeLocale "%A %e %B at %H:%M (%F)" (utcToLocalTimeTZ (tzByLabel bookingClientTimeZone) bookingUTCTime)}
+          (#{renderTZLabel bookingClientTimeZone})
+
+        <br>
+        <p>
+          For #{bookingSettingName} (#{bookingSettingEmailAddress}):
+        <p>
+          #{formatTime defaultTimeLocale "%A %e %B at %H:%M (%F)" (utcToLocalTimeTZ (tzByLabel bookingSettingTimeZone) bookingUTCTime)}
+          (#{renderTZLabel bookingSettingTimeZone})
+
+        $maybe extraInfo <- bookingExtraInfo
+          <br>
+          <p>
+            Extra info:
+          <p>
+            #{Textarea extraInfo}
+      
+      <details>
+        <div .block>
+          <p>
+            If, for whatever reason, this email does not arrive, please send this
+            <code>
+              .ics
+            file to yourself and to them.
+
+
+        <div .block>
+          <pre>
+            #{icalText}

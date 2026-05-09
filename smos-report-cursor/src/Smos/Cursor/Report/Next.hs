@@ -15,13 +15,13 @@ import Path
 import Smos.Cursor.Report.Entry
 import Smos.Cursor.SmosFile
 import Smos.Data
-import Smos.Report.Archive
-import Smos.Report.Config
+import Smos.Directory.Archive
+import Smos.Directory.OptParse
+import Smos.Directory.ShouldPrint
 import Smos.Report.Filter
 import Smos.Report.Next
-import Smos.Report.ShouldPrint
 
-produceNextActionReportCursor :: Maybe EntryFilter -> HideArchive -> ShouldPrint -> DirectoryConfig -> IO NextActionReportCursor
+produceNextActionReportCursor :: Maybe EntryFilter -> HideArchive -> ShouldPrint -> DirectorySettings -> IO NextActionReportCursor
 produceNextActionReportCursor mf ha sp dc =
   NextActionReportCursor <$> produceEntryReportCursor makeNextActionEntryCursor' id mf ha sp dc
 

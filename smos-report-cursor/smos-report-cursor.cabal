@@ -1,11 +1,11 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.7.
+-- This file has been generated from package.yaml by hpack version 0.38.3.
 --
 -- see: https://github.com/sol/hpack
 
 name:           smos-report-cursor
-version:        0.3.0
+version:        0.6.1
 category:       Smos
 author:         Tom Sydney Kerckhove
 maintainer:     syd@cs-syd.eu
@@ -16,7 +16,7 @@ library
   exposed-modules:
       Smos.Cursor.Report.Entry
       Smos.Cursor.Report.Next
-      Smos.Cursor.Report.Streaming
+      Smos.Cursor.Report.Ongoing
       Smos.Cursor.Report.Stuck
       Smos.Cursor.Report.Timestamps
       Smos.Cursor.Report.Waiting
@@ -32,12 +32,15 @@ library
     , containers
     , cursor
     , deepseq
+    , dlist
     , microlens
     , path
     , smos-cursor
     , smos-data
+    , smos-directory
     , smos-report
     , time
+    , tz
     , validity
     , validity-path
   default-language: Haskell2010

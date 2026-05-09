@@ -13,7 +13,7 @@ import Smos.Report.Waiting
 
 smosQueryWaiting :: WaitingSettings -> Q ()
 smosQueryWaiting WaitingSettings {..} = do
-  dc <- asks envDirectoryConfig
+  dc <- asks envDirectorySettings
   sp <- getShouldPrint
   report <- produceWaitingReport waitingSetFilter waitingSetHideArchive sp dc
 
@@ -25,5 +25,5 @@ smosQueryWaiting WaitingSettings {..} = do
 renderWaitingReport :: ColourSettings -> Time -> UTCTime -> WaitingReport -> [Chunk]
 renderWaitingReport colourSettings threshold now WaitingReport {..} =
   formatAsBicolourTable colourSettings $
-    map underline [chunk "file", headerChunk "header", fore blue $ chunk "waiting", chunk "threshold"] :
-    map (formatWaitingEntry threshold now) waitingReportEntries
+    map underline [chunk "file", headerChunk "header", fore blue $ chunk "waiting", chunk "threshold"]
+      : map (formatWaitingEntry threshold now) waitingReportEntries

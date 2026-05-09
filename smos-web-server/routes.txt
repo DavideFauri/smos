@@ -4,8 +4,8 @@
 /playground PlaygroundR GET
 /ws/playground-instance PlaygroundInstanceR GET
 
-/tui/*Texts TUIR GET
-/ws/tui-instance/*Texts TUIInstanceR GET
+/tui TUIR GET
+/ws/tui-instance TUIInstanceR GET
 
 -- Backups
 /backups BackupsR GET
@@ -13,6 +13,9 @@
 /backup/#{BackupUUID}/download BackupDownloadR GET
 /backup/#{BackupUUID}/delete BackupDeleteR POST
 /backup/#{BackupUUID}/restore BackupRestoreR POST
+
+-- Booking
+/booking BookingR GET
 
 /account AccountR GET
 /account/delete AccountDeleteR POST
@@ -26,9 +29,15 @@
 /checkout/stripe/success                  CheckoutSuccessR GET
 /checkout/stripe/canceled                 CheckoutCanceledR GET
 
+
+-- Public
+/book/#{Username} BookUserR GET
+/book/#{Username}/slot BookUserSlotR GET
+/book/#{Username}/details BookUserDetailsR GET POST
+
 -- Subsites
 /auth AuthR Auth getAuth
 /static StaticR EmbeddedStatic appStatic
-/style StyleR EmbeddedStatic appStyle
+/assets AssetsR EmbeddedStatic appWebAssets
 
 /ws/reload ReloadR GET

@@ -15,7 +15,7 @@ smosQueryProjects ProjectsSettings {..} = do
   projs <-
     sourceToList $
       streamSmosProjectsQ
-        .| smosMFilter (FilterFst <$> projectsSetFilter)
+        .| mFilterConduit (FilterFst <$> projectsSetFilter)
   let projectsReport = makeProjectsReport projs
   colourSettings <- asks envColourSettings
   outputChunks $ renderProjectsReport colourSettings projectsReport
@@ -25,7 +25,7 @@ renderProjectsReport colourSettings = formatAsBicolourTable colourSettings . map
 
 renderProjectEntry :: ProjectEntry -> [Chunk]
 renderProjectEntry ProjectEntry {..} =
-  pathChunk projectEntryFilePath :
-  case projectEntryCurrentEntry of
-    Nothing -> [chunk "No next action"]
-    Just e@Entry {..} -> [mTodoStateChunk $ entryState e, headerChunk entryHeader]
+  pathChunk projectEntryFilePath
+    : case projectEntryCurrentEntry of
+      Nothing -> [chunk "No next action"]
+      Just e@Entry {..} -> [mTodoStateChunk $ entryState e, headerChunk entryHeader]

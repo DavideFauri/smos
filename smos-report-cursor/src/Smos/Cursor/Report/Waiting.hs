@@ -16,14 +16,14 @@ import Path
 import Smos.Cursor.Report.Entry
 import Smos.Cursor.SmosFile
 import Smos.Data
-import Smos.Report.Archive
-import Smos.Report.Config
+import Smos.Directory.Archive
+import Smos.Directory.OptParse
+import Smos.Directory.ShouldPrint
 import Smos.Report.Filter
-import Smos.Report.ShouldPrint
 import Smos.Report.Time
 import Smos.Report.Waiting
 
-produceWaitingReportCursor :: Maybe EntryFilter -> HideArchive -> ShouldPrint -> DirectoryConfig -> IO WaitingReportCursor
+produceWaitingReportCursor :: Maybe EntryFilter -> HideArchive -> ShouldPrint -> DirectorySettings -> IO WaitingReportCursor
 produceWaitingReportCursor mf ha sp dc =
   WaitingReportCursor
     <$> produceEntryReportCursor makeWaitingEntryCursor' sortWaitingReport mf ha sp dc

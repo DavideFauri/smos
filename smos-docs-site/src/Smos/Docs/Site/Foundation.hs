@@ -13,31 +13,31 @@
 module Smos.Docs.Site.Foundation
   ( module Smos.Docs.Site.Foundation,
     module Smos.Docs.Site.Assets,
-    module Smos.Docs.Site.Casts,
     module Smos.Docs.Site.Static,
     module Smos.Docs.Site.Changelog,
     module Smos.Docs.Site.Widget,
+    module Smos.Web.Assets,
     module Yesod,
   )
 where
 
 import Autodocodec
 import Autodocodec.Yaml
-import Data.List
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Maybe
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time
 import Language.Haskell.TH.Load
+import qualified OptEnvConf
+import qualified OptEnvConf.Args as OptEnvConf
 import Smos.Docs.Site.Assets
-import Smos.Docs.Site.Casts
 import Smos.Docs.Site.Changelog
 import Smos.Docs.Site.Constants
 import Smos.Docs.Site.Static
 import Smos.Docs.Site.Widget
-import Smos.Web.Style
+import Smos.Web.Assets
+import Text.Colour
 import Text.Hamlet
 import Yesod
 import Yesod.AutoReload
@@ -46,8 +46,7 @@ import Yesod.EmbeddedStatic
 data App = App
   { appWebserverUrl :: !(Maybe Text),
     appAssets :: !EmbeddedStatic,
-    appCasts :: !EmbeddedStatic,
-    appStyle :: !EmbeddedStatic,
+    appWebAssets :: !EmbeddedStatic,
     appGoogleAnalyticsTracking :: !(Maybe Text),
     appGoogleSearchConsoleVerification :: !(Maybe Text)
   }
@@ -60,11 +59,10 @@ instance Yesod App where
     let addReloadWidget = if development then (<> autoReloadWidgetFor ReloadR) else id
     pageContent <-
       widgetToPageContent $ do
-        addStylesheet $ StyleR index_css
+        addStylesheet $ WebAssetsStaticR index_css
         addStylesheet $ AssetsStaticR font_awesome_css
         toWidgetHead
           [hamlet|<link rel="icon" href=@{AssetsR ["logo.svg"]} sizes="16x16 32x32 48x48 64x84" type="image/x-icon">|]
-        addScript $ AssetsStaticR asciinema_player_js
         addStylesheet $ AssetsStaticR asciinema_player_css
         let menu = $(widgetFile "menu")
         addReloadWidget $(widgetFile "default-body")
@@ -86,10 +84,10 @@ getHomeR = defaultLayout $ do
   mWebUrl <- getsYesod appWebserverUrl
   $(widgetFile "home")
 
-getCastsR :: [Text] -> Handler Html
-getCastsR t = do
+getWebAssetsR :: [Text] -> Handler Html
+getWebAssetsR t = do
   neverExpires
-  redirect $ T.intercalate "/" $ "/casts-static/res" : t
+  redirect $ T.intercalate "/" $ "/web-assets-static/res" : t
 
 getAssetsR :: [Text] -> Handler Html
 getAssetsR t = do
@@ -110,24 +108,64 @@ lookupPage' url = do
     Nothing -> notFound
     Just dp -> pure dp
 
-lookupPagesIn :: [Text] -> Handler [([Text], DocPage)]
-lookupPagesIn dir =
-  mapMaybe (\(k, v) -> (,) <$> stripPrefix dir k <*> pure v)
-    . M.toList
-    . M.filterWithKey (\parts _ -> dir `isPrefixOf` parts)
-    <$> loadDocPages
-
-setSmosTitle :: MonadWidget m => Html -> m ()
+setSmosTitle :: (MonadWidget m) => Html -> m ()
 setSmosTitle t = setTitle $ "Smos Documentation - " <> t
 
-loadDocPages :: MonadHandler m => m (Map [Text] DocPage)
+loadDocPages :: (MonadHandler m) => m (Map [Text] DocPage)
 loadDocPages = loadIO docPages
 
-yamlDesc :: forall a. HasCodec a => Text
+yamlDesc :: forall a. (HasCodec a) => Text
 yamlDesc = yamlDescVia (codec @a)
 
 yamlDescVia :: forall a. JSONCodec a -> Text
 yamlDescVia = renderPlainSchemaVia
 
-confDocsWithKey :: forall o. HasCodec o => Text -> Text
-confDocsWithKey key = yamlDescVia $ Autodocodec.object "Configuration" $ optionalFieldWith' key (codec @o)
+makeSettingsPage :: forall a. (OptEnvConf.HasParser a) => String -> Handler Html
+makeSettingsPage progname = do
+  DocPage {..} <- lookupPage $ T.pack progname
+  defaultLayout $ do
+    let p = OptEnvConf.settingsParser :: OptEnvConf.Parser a
+    let docs = OptEnvConf.parserDocs p
+    let docsChunks = OptEnvConf.renderReferenceDocumentation progname docs
+    let render = renderChunksText WithoutColours
+    let referenceDocs = render docsChunks
+    let renderedOptDocs = render $ OptEnvConf.renderLongOptDocs $ OptEnvConf.docsToOptDocs docs
+    let renderedEnvDocs = render $ OptEnvConf.renderEnvDocs $ OptEnvConf.docsToEnvDocs docs
+    let renderedConfDocs = render $ OptEnvConf.renderConfDocs $ OptEnvConf.docsToConfDocs docs
+    setSmosTitle $ toHtml docPageTitle
+    setDescriptionIdemp docPageDescription
+    $(widgetFile "settings")
+
+makeCommandSettingsPage :: forall a. (OptEnvConf.HasParser a) => String -> Text -> Handler Html
+makeCommandSettingsPage progname command = do
+  DocPage {..} <- lookupPage' [T.pack progname, command]
+
+  errOrHelpDoc <-
+    liftIO $
+      OptEnvConf.runHelpParser
+        Nothing
+        (OptEnvConf.parseArgs [T.unpack command])
+        (OptEnvConf.settingsParser :: OptEnvConf.Parser a)
+  case errOrHelpDoc of
+    Left err -> error $ show err -- Will be caught by yesod
+    Right Nothing -> error "Command not found"
+    Right (Just (path, cDoc)) -> do
+      let docsChunks = OptEnvConf.renderCommandHelpPage progname path cDoc
+      let docs = OptEnvConf.commandDocs cDoc
+
+      defaultLayout $ do
+        let render = renderChunksText WithoutColours
+        let referenceDocs = render docsChunks
+        let optDocs = OptEnvConf.docsToOptDocs docs
+        let renderedOptDocs =
+              render $
+                concat
+                  [ OptEnvConf.renderShortOptDocs (unwords [progname, T.unpack command]) optDocs,
+                    ["\n\n"],
+                    OptEnvConf.renderLongOptDocs optDocs
+                  ]
+        let renderedEnvDocs = render $ OptEnvConf.renderEnvDocs $ OptEnvConf.docsToEnvDocs docs
+        let renderedConfDocs = render $ OptEnvConf.renderConfDocs $ OptEnvConf.docsToConfDocs docs
+        setSmosTitle $ toHtml docPageTitle
+        setDescriptionIdemp docPageDescription
+        $(widgetFile "settings")

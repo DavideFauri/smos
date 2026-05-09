@@ -12,7 +12,7 @@ import Data.Time
 import Path
 import Path.IO
 import Smos.Data
-import Smos.Report.Config
+import Smos.Directory.Resolution
 import Smos.Single.OptParse
 import System.Exit
 
@@ -21,7 +21,7 @@ smosSingle = getSettings >>= single
 
 single :: Settings -> IO ()
 single Settings {..} = do
-  wd <- resolveDirWorkflowDir setDirectorySettings
+  wd <- resolveWorkflowDir setWorkflowDirSpec
   path <-
     (wd </>)
       <$> case setTaskFile of

@@ -1,0 +1,55 @@
+$doctype 5
+<html>
+  <body>
+
+    <p>
+      <b>
+        ACTION REQUIRED: Add this event to your calendar
+
+    <p>
+      Some calendar providers, notably Google and Microsoft, do not automatically add calendar invites to your calendar.
+
+    <br>
+
+    <p>
+      This is a calendar invite from
+      #{bookingClientName} (
+      <code>
+        #{bookingClientEmailAddress}
+      ) for #{bookingSettingName} (
+      <code>
+        #{bookingSettingEmailAddress}
+      ).
+
+
+    <br>
+
+    $maybe extraInfo <- bookingExtraInfo
+      $forall l <- T.lines extraInfo
+        <p>
+          #{l}
+      <br>
+
+
+    <p>
+      For #{bookingSettingName}:
+    <p>
+      #{formatTime defaultTimeLocale "%A %H:%M %F" (utcToLocalTimeTZ (tzByLabel bookingSettingTimeZone) bookingUTCTime)}
+      (#{renderTZLabel bookingSettingTimeZone})
+
+    <br>
+
+    <p>
+      For #{bookingClientName}:
+    <p>
+      #{formatTime defaultTimeLocale "%A %H:%M %F" (utcToLocalTimeTZ (tzByLabel bookingClientTimeZone) bookingUTCTime)}
+      (#{renderTZLabel bookingClientTimeZone})
+
+
+    <br>
+    <br>
+
+
+    <p>
+      Attached is an .ics file that contains the calendar invitation.
+

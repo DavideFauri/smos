@@ -1,11 +1,11 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.6.
+-- This file has been generated from package.yaml by hpack version 0.38.3.
 --
 -- see: https://github.com/sol/hpack
 
 name:           smos-client
-version:        0.5.1
+version:        0.6.0
 category:       Smos
 author:         Tom Sydney Kerckhove
 maintainer:     syd@cs-syd.eu
@@ -27,7 +27,9 @@ library
     , deepseq
     , dirforest
     , http-types
+    , ical
     , microlens
+    , mtl
     , path
     , pretty-show
     , semver

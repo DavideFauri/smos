@@ -1,185 +1,140 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Smos.GitHub.OptParse
-  ( module Smos.GitHub.OptParse,
-    module Smos.GitHub.OptParse.Types,
+  ( Instructions (..),
+    Dispatch (..),
+    ImportSettings (..),
+    ImportDestination (..),
+    Settings (..),
+    getInstructions,
   )
 where
 
-import Control.Monad
-import Data.Version
-import qualified Env
-import Options.Applicative
-import Options.Applicative.Help.Pretty as Doc
+import Data.Text (Text)
+import OptEnvConf
 import Path
 import Paths_smos_github
-import Smos.Data
-import Smos.GitHub.OptParse.Types
-import Smos.Query.OptParse (getColourSettings)
-import qualified Smos.Report.Config as Report
-import qualified Smos.Report.OptParse as Report
-import qualified System.Environment as System
-import System.Exit
+import Smos.CLI.Colour
+import Smos.CLI.OptParse
+import Smos.Directory.OptParse
 
 getInstructions :: IO Instructions
-getInstructions = do
-  (Arguments cmd flags) <- getArguments
-  env <- getEnvironment
-  config <- getConfiguration flags env
-  combineToInstructions cmd (Report.flagWithRestFlags flags) (Report.envWithRestEnv env) config
+getInstructions = runSettingsParser version "Smos' GitHub tool"
 
-combineToInstructions :: Command -> Flags -> Environment -> Maybe Configuration -> IO Instructions
-combineToInstructions cmd Flags {..} Environment {..} mc = do
-  d <- case cmd of
-    CommandList -> pure DispatchList
-    CommandImport ImportFlags {..} -> do
-      let importSetUrl = importFlagUrl
-      let importSetForce = importFlagForce
-      importDestinationFile <-
-        forM importFlagFile $ \file ->
-          case Path.Rel <$> parseRelFile file
-            <|> Path.Abs <$> parseAbsFile file of
-            Nothing -> die $ "Could not parse file path: " <> file
-            Just someBase -> pure someBase
-      importDestinationDirectory <-
-        forM importFlagDirectory $ \file ->
-          case Path.Rel <$> parseRelDir file
-            <|> Path.Abs <$> parseAbsDir file of
-            Nothing -> die $ "Could not parse directory path: " <> file
-            Just someBase -> pure someBase
-      let importSetDestination = ImportDestination {..}
-      pure $ DispatchImport ImportSettings {..}
-  setDirectorySettings <-
-    Report.combineToDirectoryConfig
-      Report.defaultDirectoryConfig
-      flagDirectoryFlags
-      envDirectoryEnvironment
-      (confDirectoryConfiguration <$> mc)
-  let setColourConfig = getColourSettings (mc >>= confColourConfiguration)
-  let setGithubOauthToken = flagGithubOAuthToken <|> envGithubOAuthToken <|> cM githubConfOAuthToken
-  pure (Instructions d Settings {..})
-  where
-    cM :: (GitHubConfiguration -> Maybe a) -> Maybe a
-    cM func = mc >>= confGitHubConfiguration >>= func
+data Instructions
+  = Instructions
+      !Dispatch
+      !Settings
 
-getConfiguration :: Report.FlagsWithConfigFile Flags -> Report.EnvWithConfigFile Environment -> IO (Maybe Configuration)
-getConfiguration = Report.getConfiguration
+instance HasParser Instructions where
+  settingsParser =
+    withSmosConfig $
+      Instructions
+        <$> settingsParser
+        <*> settingsParser
 
-getEnvironment :: IO (Report.EnvWithConfigFile Environment)
-getEnvironment = Env.parse (Env.header "Environment") prefixedEnvironmentParser
+data Dispatch
+  = DispatchList
+  | DispatchImport !ImportSettings
 
-prefixedEnvironmentParser :: Env.Parser Env.Error (Report.EnvWithConfigFile Environment)
-prefixedEnvironmentParser = Env.prefixed "SMOS_" environmentParser
-
-environmentParser :: Env.Parser Env.Error (Report.EnvWithConfigFile Environment)
-environmentParser =
-  Report.envWithConfigFileParser $
-    Environment
-      <$> Report.directoryEnvironmentParser
-      <*> optional (Env.var Env.str "GITHUB_OAUTH_TOKEN" (Env.help "Github Oauth Token"))
-
-getArguments :: IO Arguments
-getArguments = do
-  args <- System.getArgs
-  let result = runArgumentsParser args
-  handleParseResult result
-
-runArgumentsParser :: [String] -> ParserResult Arguments
-runArgumentsParser = execParserPure prefs_ argumentsParser
-  where
-    prefs_ =
-      defaultPrefs
-        { prefShowHelpOnError = True,
-          prefShowHelpOnEmpty = True
-        }
-
-argumentsParser :: ParserInfo Arguments
-argumentsParser = info (helper <*> parseArguments) help_
-  where
-    help_ = fullDesc <> progDescDoc (Just description)
-    description :: Doc
-    description =
-      Doc.vsep $
-        map Doc.text $
-          [ "",
-            "Smos GitHub Tool version: " <> showVersion version,
-            ""
-          ]
-            ++ readWriteDataVersionsHelpMessage
-
-parseArguments :: Parser Arguments
-parseArguments = Arguments <$> parseCommand <*> parseFlags
-
-parseCommand :: Parser Command
-parseCommand =
-  hsubparser $
-    mconcat
-      [ command "list" parseCommandList,
-        command "import" parseCommandImport
+instance HasParser Dispatch where
+  settingsParser =
+    commands
+      [ command "list" "List relevant GitHub issues" $
+          pure DispatchList,
+        command "import" "Import a GitHub issue as a smos project" $
+          DispatchImport <$> settingsParser
       ]
 
-parseCommandList :: ParserInfo Command
-parseCommandList = info parser modifier
-  where
-    modifier = fullDesc <> progDesc "List the relevant github issues"
-    parser = pure CommandList
+data ImportSettings = ImportSettings
+  { importSetUrl :: !String,
+    importSetForce :: !Bool,
+    importSetDestination :: !ImportDestination
+  }
 
-parseCommandImport :: ParserInfo Command
-parseCommandImport = info parser modifier
-  where
-    modifier = fullDesc <> progDesc "Import a github issue as a smos project"
-    parser =
-      CommandImport
-        <$> ( ImportFlags
-                <$> strArgument
-                  ( mconcat
-                      [ help "The url to the issue to import",
-                        metavar "URL"
-                      ]
-                  )
-                <*> switch
-                  ( mconcat
-                      [ long "force",
-                        help "Overwrite an existing file"
-                      ]
-                  )
-                <*> optional
-                  ( strOption
-                      ( mconcat
-                          [ help "File to put the resulting project in",
-                            short 'f',
-                            long "file",
-                            metavar "FILEPATH",
-                            completer $ bashCompleter "file"
-                          ]
-                      )
-                  )
-                <*> optional
-                  ( strOption
-                      ( mconcat
-                          [ help "Directory to put the resulting project in",
-                            short 'd',
-                            long "directory",
-                            metavar "FILEPATH",
-                            completer $ bashCompleter "directory"
-                          ]
-                      )
-                  )
-            )
+instance HasParser ImportSettings where
+  settingsParser = parseImportSettings
 
-parseFlags :: Parser (Report.FlagsWithConfigFile Flags)
-parseFlags =
-  Report.parseFlagsWithConfigFile $
-    Flags
-      <$> Report.parseDirectoryFlags
-      <*> optional
-        ( strOption
-            ( mconcat
-                [ short 'g',
-                  long "github-oauth-token",
-                  metavar "OAUTH_TOKEN",
-                  help "A github OAuth token"
-                ]
-            )
-        )
+{-# ANN parseImportSettings ("NOCOVER" :: String) #-}
+parseImportSettings :: OptEnvConf.Parser ImportSettings
+parseImportSettings = do
+  importSetUrl <-
+    setting
+      [ help "The url to the issue to import",
+        argument,
+        reader str,
+        metavar "URL"
+      ]
+  importSetForce <-
+    setting
+      [ help "Overwrite an existing file",
+        switch True,
+        value False,
+        long "force"
+      ]
+  importSetDestination <- settingsParser
+  pure ImportSettings {..}
+
+data ImportDestination = ImportDestination
+  { importDestinationFile :: !(Maybe (SomeBase File)),
+    importDestinationDirectory :: !(Maybe (SomeBase Dir))
+  }
+
+instance HasParser ImportDestination where
+  settingsParser = parseImportDestination
+
+{-# ANN parseImportDestination ("NOCOVER" :: String) #-}
+parseImportDestination :: OptEnvConf.Parser ImportDestination
+parseImportDestination = do
+  importDestinationFile <-
+    optional $
+      setting
+        [ help "File to put the resulting project in",
+          reader $ maybeReader $ fmap Path.Rel . parseRelFile,
+          reader $ maybeReader $ fmap Path.Abs . parseAbsFile,
+          option,
+          long "file",
+          short 'f',
+          metavar "FILE_PATH"
+        ]
+  importDestinationDirectory <-
+    optional $
+      setting
+        [ help "Directory to put the resulting project in",
+          reader $ maybeReader $ fmap Path.Rel . parseRelDir,
+          reader $ maybeReader $ fmap Path.Abs . parseAbsDir,
+          option,
+          long "directory",
+          short 'd',
+          metavar "DIRECTORY_PATH"
+        ]
+  pure ImportDestination {..}
+
+data Settings = Settings
+  { setDirectorySettings :: !DirectorySettings,
+    setColourSettings :: !ColourSettings,
+    setGitHubOauthToken :: !(Maybe Text)
+  }
+
+instance HasParser Settings where
+  settingsParser = parseSettings
+
+{-# ANN parseSettings ("NOCOVER" :: String) #-}
+parseSettings :: OptEnvConf.Parser Settings
+parseSettings = do
+  setDirectorySettings <- settingsParser
+  setColourSettings <- settingsParser
+  let sub = subConfig_ "github" . subEnv_ "github"
+  setGitHubOauthToken <-
+    optional $
+      sub $
+        secretTextFileOrBareSetting
+          [ help "OAuth token for contacting GitHub",
+            reader str,
+            name "oauth-token",
+            short 'g',
+            metavar "OAUTH_TOKEN"
+          ]
+  pure Settings {..}

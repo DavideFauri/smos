@@ -1,22 +1,26 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Smos.Server.Backup where
 
 import Conduit
+import Data.ByteString (ByteString)
 import qualified Data.Conduit.Combinators as C
 import Data.Monoid (Sum (..))
 import Data.Time
 import Data.UUID.Typed (nextRandomUUID)
-import Database.Persist
+import Data.Word
+import qualified Database.Esqueleto.Experimental as E
+import Database.Persist as DB
+import Database.Persist.Pagination
 import Database.Persist.Sql
 import Smos.API
 import Smos.Server.DB
 
-doBackupForUser :: MonadUnliftIO m => Int -> UserId -> SqlPersistT m BackupUUID
+doBackupForUser :: (MonadUnliftIO m) => Int -> UserId -> SqlPersistT m BackupUUID
 doBackupForUser compressionLevel uid = do
   now <- liftIO getCurrentTime
-  acqFileSource <- selectSourceRes [ServerFileUser ==. uid] []
 
   uuid <- nextRandomUUID
 
@@ -30,19 +34,48 @@ doBackupForUser compressionLevel uid = do
           backupSize = 0 -- Temporarily
         }
 
-  Sum size <- withAcquire acqFileSource $ \source -> do
-    let insertAndCount (Entity _ ServerFile {..}) = do
-          let compressedContents = compressByteString compressionLevel serverFileContents
-          insert_ BackupFile {backupFileBackup = backupId, backupFilePath = serverFilePath, backupFileContents = compressedContents}
-          pure $ Sum $ compressedSize compressedContents
+  let insertAndCount (Entity _ ServerFile {..}) = do
+        (casFileId, size) <- upsertCASFile compressionLevel serverFileContents
+        _ <-
+          DB.upsertBy
+            (UniqueBackupFilePath backupId serverFilePath)
+            BackupFile
+              { backupFileBackup = backupId,
+                backupFilePath = serverFilePath,
+                backupFileFile = casFileId
+              }
+            []
+        pure size
 
-    runConduit $ source .| C.mapM insertAndCount .| C.fold
+  Sum size <-
+    runConduit $
+      streamEntities [ServerFileUser ==. uid] ServerFileId (PageSize 256) Ascend (Range Nothing Nothing)
+        .| C.mapM insertAndCount
+        .| C.fold
 
   update backupId [BackupSize =. size]
 
   pure uuid
 
-deleteBackupById :: MonadIO m => BackupId -> SqlPersistT m ()
-deleteBackupById bid = do
-  deleteWhere [BackupFileBackup ==. bid]
-  delete bid
+upsertCASFile :: (MonadIO m) => Int -> ByteString -> SqlPersistT m (CasFileId, Sum Word64)
+upsertCASFile compressionLevel contents = do
+  let hash = hashContents contents
+  mExisting <- E.selectOne $ do
+    casFile <- E.from $ E.table @CasFile
+    E.where_ (casFile E.^. CasFileHash E.==. E.val hash)
+    pure (casFile E.^. CasFileId, E.length_ (casFile E.^. CasFileContents))
+  case mExisting of
+    Just (E.Value casFileId, E.Value size) ->
+      pure
+        ( casFileId,
+          Sum size
+        )
+    Nothing -> do
+      let compressedContents = compressByteString compressionLevel contents
+      let casFile =
+            CasFile
+              { casFileHash = hash,
+                casFileContents = compressedContents
+              }
+      casFileId <- DB.insert casFile
+      pure (casFileId, Sum $ compressedSize compressedContents)

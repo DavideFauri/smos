@@ -1,11 +1,11 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.7.
+-- This file has been generated from package.yaml by hpack version 0.38.3.
 --
 -- see: https://github.com/sol/hpack
 
 name:           smos-web-server
-version:        0.8.0
+version:        0.14.4
 category:       Smos
 author:         Tom Sydney Kerckhove
 maintainer:     syd@cs-syd.eu
@@ -19,6 +19,11 @@ extra-source-files:
     templates/auth/login.hamlet
     templates/auth/register.hamlet
     templates/backups.hamlet
+    templates/book-user/add-info.hamlet
+    templates/book-user/booked.hamlet
+    templates/book-user/select-slot.hamlet
+    templates/book-user/select-timezone.hamlet
+    templates/booking.hamlet
     templates/checkout.hamlet
     templates/default-body.hamlet
     templates/default-page.hamlet
@@ -48,6 +53,8 @@ extra-source-files:
     assets/tom-sydney-kerckhove_tiktok-icon.svg
     assets/tom-sydney-kerckhove_twitter-icon.svg
     assets/tom-sydney-kerckhove_youtube-icon.svg
+    documentation.txt
+    options.nix
 
 library
   exposed-modules:
@@ -59,6 +66,7 @@ library
       Smos.Web.Server.Handler.Account
       Smos.Web.Server.Handler.Admin
       Smos.Web.Server.Handler.Backup
+      Smos.Web.Server.Handler.Booking
       Smos.Web.Server.Handler.Checkout
       Smos.Web.Server.Handler.Home
       Smos.Web.Server.Handler.Import
@@ -66,7 +74,6 @@ library
       Smos.Web.Server.Handler.Reload
       Smos.Web.Server.Handler.TUI
       Smos.Web.Server.OptParse
-      Smos.Web.Server.OptParse.Types
       Smos.Web.Server.Serve
       Smos.Web.Server.SmosSession
       Smos.Web.Server.Static
@@ -82,44 +89,50 @@ library
       autoexporter:autoexporter
   build-depends:
       aeson
-    , autodocodec
     , autodocodec-yaml
     , base
-    , base16-bytestring
     , bytestring
     , conduit
     , containers
     , data-default
     , deepseq
-    , envparse
-    , filepath
     , http-client
     , http-client-tls
     , http-types
+    , ical
     , monad-logger
     , mtl
-    , optparse-applicative
+    , opt-env-conf
     , path
     , path-io
     , persistent-sqlite
     , pretty-relative-time
     , pretty-show
+    , prometheus
+    , prometheus-ghc-stats
+    , prometheus-wai
     , servant
     , servant-auth-client
     , servant-client
     , shakespeare
     , smos
+    , smos-cli
     , smos-client
-    , smos-sync-client
-    , smos-web-style
-    , stm
+    , smos-data
+    , smos-directory
+    , smos-e2e
+    , smos-report
+    , smos-sync
+    , smos-web-assets
     , template-haskell
     , text
     , time
     , typed-uuid
+    , tz
     , unliftio
     , wai-extra
     , warp
+    , yaml
     , yesod
     , yesod-auth
     , yesod-autoreload
@@ -134,7 +147,7 @@ executable smos-web-server
       Paths_smos_web_server
   hs-source-dirs:
       app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -optP-Wno-nonportable-include-path
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -with-rtsopts=-Iw60 -with-rtsopts=--nonmoving-gc -with-rtsopts=-T -optP-Wno-nonportable-include-path
   build-depends:
       base
     , smos-web-server
@@ -147,7 +160,9 @@ test-suite smos-web-server-test
       Smos.Web.Server.Handler.AccountSpec
       Smos.Web.Server.Handler.AuthSpec
       Smos.Web.Server.Handler.BackupSpec
+      Smos.Web.Server.Handler.BookingSpec
       Smos.Web.Server.Handler.HomeSpec
+      Smos.Web.Server.OptParseSpec
       Smos.Web.Server.TestUtils
       Paths_smos_web_server
   hs-source-dirs:
@@ -162,16 +177,23 @@ test-suite smos-web-server-test
     , genvalidity-sydtest
     , http-client
     , http-types
+    , mergeful
     , monad-logger
+    , mtl
+    , opt-env-conf-test
+    , path-io
     , servant-client
+    , smos-api
     , smos-client
     , smos-data-gen
     , smos-server-gen
+    , smos-web-assets
     , smos-web-server
-    , smos-web-style
-    , stm
     , sydtest
     , sydtest-yesod
     , text
+    , time
+    , tz
+    , yaml
     , yesod-auth
   default-language: Haskell2010

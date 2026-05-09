@@ -3,7 +3,6 @@
 
 module Smos.Cursor.Report.Timestamps where
 
-import Conduit
 import Control.DeepSeq
 import Cursor.Forest
 import Data.List
@@ -18,25 +17,24 @@ import Path
 import Smos.Cursor.Report.Entry
 import Smos.Cursor.SmosFile
 import Smos.Data
-import Smos.Report.Archive
-import Smos.Report.Config
+import Smos.Directory.Archive
+import Smos.Directory.OptParse
+import Smos.Directory.ShouldPrint
 import Smos.Report.Filter
 import Smos.Report.Period
-import Smos.Report.ShouldPrint
 
-produceTimestampsReportCursor :: ZonedTime -> Period -> Maybe EntryFilter -> HideArchive -> ShouldPrint -> DirectoryConfig -> IO TimestampsReportCursor
-produceTimestampsReportCursor now period mf ha sp dc = TimestampsReportCursor <$> produceEntryReportCursor (makeTimestampsEntryCursorAndFilterByPeriod now period) sortTimestampEntryCursors mf ha sp dc
+produceTimestampsReportCursor :: Day -> Period -> Maybe EntryFilter -> HideArchive -> ShouldPrint -> DirectorySettings -> IO TimestampsReportCursor
+produceTimestampsReportCursor today period mf ha sp dc =
+  TimestampsReportCursor <$> produceEntryReportCursor (makeTimestampsEntryCursorAndFilterByPeriod today period) sortTimestampEntryCursors mf ha sp dc
 
-timestampsReportCursorConduit :: Monad m => ZonedTime -> Period -> Maybe EntryFilter -> ConduitT (Path Rel File, SmosFile) void m TimestampsReportCursor
-timestampsReportCursorConduit now period mf =
-  TimestampsReportCursor <$> entryReportCursorConduit (makeTimestampsEntryCursorAndFilterByPeriod now period) sortTimestampEntryCursors mf
+makeTimestampsEntryCursorAndFilterByPeriod :: Day -> Period -> Path Rel File -> ForestCursor Entry Entry -> [TimestampsEntryCursor]
+makeTimestampsEntryCursorAndFilterByPeriod today period rf fc =
+  filter (filterTimestampsEntryCursorByPeriod today period) $ makeTimestampsEntryCursor rf fc
 
-makeTimestampsEntryCursorAndFilterByPeriod :: ZonedTime -> Period -> Path Rel File -> ForestCursor Entry Entry -> [TimestampsEntryCursor]
-makeTimestampsEntryCursorAndFilterByPeriod now period rf fc =
-  filter (filterTimestampsEntryCursorByPeriod now period) $ makeTimestampsEntryCursor rf fc
-
-filterTimestampsEntryCursorByPeriod :: ZonedTime -> Period -> TimestampsEntryCursor -> Bool
-filterTimestampsEntryCursorByPeriod now period = filterPeriodLocal now period . timestampLocalTime . timestampsEntryCursorTimestamp
+filterTimestampsEntryCursorByPeriod :: Day -> Period -> TimestampsEntryCursor -> Bool
+filterTimestampsEntryCursorByPeriod today period =
+  let interval = periodInterval today period
+   in filterIntervalTimestamp interval . timestampsEntryCursorTimestamp
 
 newtype TimestampsReportCursor = TimestampsReportCursor
   { timestampsReportCursorEntryReportCursor :: EntryReportCursor TimestampsEntryCursor

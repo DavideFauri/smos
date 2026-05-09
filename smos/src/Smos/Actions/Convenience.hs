@@ -34,10 +34,10 @@ import Smos.Actions.File
 import Smos.Actions.Forest
 import Smos.Actions.Utils
 import Smos.Archive.Commands.File
-import Smos.Archive.OptParse.Types as Archive
+import Smos.Archive.OptParse as Archive
 import Smos.Cursor.SmosFileEditor
 import Smos.Data
-import Smos.Report.Config
+import Smos.Report.OptParse
 import Smos.Types
 import System.Exit
 import System.Process
@@ -85,7 +85,7 @@ convRepinged =
             steps =
               [ smosFileCursorSelectedEntryL . entryCursorStateHistoryCursorL %~ stateHistoryCursorSetTodoState now "DONE",
                 smosFileCursorInsertEntryAfterAndSelectHeader,
-                smosFileCursorSelectedEntryL . entryCursorHeaderCursorL %~ (\hc -> fromMaybe hc $ headerCursorAppendString "Ping again" hc),
+                smosFileCursorSelectedEntryL . entryCursorHeaderCursorL %~ (\hc -> fromMaybe hc $ headerCursorAppendString "Ping" hc),
                 smosFileCursorSelectedEntryL . entryCursorStateHistoryCursorL %~ stateHistoryCursorSetTodoState now "DONE",
                 smosFileCursorInsertEntryAfterAndSelectHeader,
                 let e' =
@@ -104,7 +104,7 @@ convRepinged =
               ]
         pure $ applySteps steps sfc,
       actionDescription =
-        "Mark the current task as 'done', add a new entry called 'Ping again' and add a new WAITING entry below that, that duplicates the original entry."
+        "Mark the current task as 'done', add a new entry called 'Ping' and add a new WAITING entry below that, that duplicates the original entry."
     }
 
 convResponded :: Action
@@ -181,7 +181,7 @@ convArchiveFile =
         modifyMSmosFileEditorCursorMS $ \case
           Nothing -> pure Nothing
           Just sfec -> do
-            dc <- asks $ smosReportConfigDirectoryConfig . configReportConfig
+            dc <- asks $ reportSettingDirectorySettings . configReportSettings
             let runArchiveM =
                   liftIO
                     . flip
@@ -212,50 +212,52 @@ convOpenUrl :: Action
 convOpenUrl =
   Action
     { actionName = "convOpenUrl",
-      actionFunc = modifyEntryCursorS $ \ec -> do
-        let e = rebuildEntryCursor ec
-        let murl = do
-              urlPv <- M.lookup "url" $ entryProperties e
-              pure $ propertyValueText urlPv
+      actionFunc = requireUnsandboxed $
+        modifyEntryCursorS $ \ec -> do
+          let e = rebuildEntryCursor ec
+          let murl = do
+                urlPv <- M.lookup "url" $ entryProperties e
+                pure $ propertyValueText urlPv
 
-        forM_ murl $ \url -> do
-          mXdgOpenExecutable <- findExecutable [relfile|xdg-open|]
-          case mXdgOpenExecutable of
-            Nothing -> addErrorMessage "No xdg-open executable found."
-            Just xdgOpenExecutable -> do
-              runSmosAsync $ do
-                let cp =
-                      (proc (fromAbsFile xdgOpenExecutable) [T.unpack url])
-                        { std_in = CreatePipe,
-                          std_out = CreatePipe,
-                          std_err = CreatePipe
-                        }
-                _ <- createProcess cp
-                pure ()
-        pure ec,
+          forM_ murl $ \url -> do
+            mXdgOpenExecutable <- findExecutable [relfile|xdg-open|]
+            case mXdgOpenExecutable of
+              Nothing -> addErrorMessage "No xdg-open executable found."
+              Just xdgOpenExecutable -> do
+                runSmosAsync $ do
+                  let cp =
+                        (proc (fromAbsFile xdgOpenExecutable) [T.unpack url])
+                          { std_in = CreatePipe,
+                            std_out = CreatePipe,
+                            std_err = CreatePipe
+                          }
+                  _ <- createProcess cp
+                  pure ()
+          pure ec,
       actionDescription = "Open the url in the 'url' property of the currently selected entry"
     }
 
 convCopyContentsToClipboard :: Action
-convCopyContentsToClipboard =
+convCopyContentsToClipboard = do
   Action
     { actionName = "convCopyContentsToClipboard",
-      actionFunc = modifyEntryCursorS $ \ec -> do
-        let e = rebuildEntryCursor ec
-        forM_ (entryContents e) $ \cts -> do
-          mXclipExecutable <- findExecutable [relfile|xclip|]
-          case mXclipExecutable of
-            Nothing -> addErrorMessage "No xclip executable found."
-            Just xclipExecutable -> do
-              exitCode <- liftIO $
-                withSystemTempDir "smos-clipboard" $ \tdir -> do
-                  tfile <- resolveFile tdir "contents-file"
-                  SB.writeFile (fromAbsFile tfile) (TE.encodeUtf8 (contentsText cts))
-                  rawSystem (fromAbsFile xclipExecutable) ["-in", "-selection", "clipboard", fromAbsFile tfile]
-              case exitCode of
-                ExitFailure c -> addErrorMessage $ T.pack $ unwords ["xclip failed with exit code:", show c]
-                ExitSuccess -> pure ()
-        pure ec,
+      actionFunc = requireUnsandboxed $
+        modifyEntryCursorS $ \ec -> do
+          let e = rebuildEntryCursor ec
+          forM_ (entryContents e) $ \cts -> do
+            mXclipExecutable <- findExecutable [relfile|xclip|]
+            case mXclipExecutable of
+              Nothing -> addErrorMessage "No xclip executable found."
+              Just xclipExecutable -> do
+                exitCode <- liftIO $
+                  withSystemTempDir "smos-clipboard" $ \tdir -> do
+                    tfile <- resolveFile tdir "contents-file"
+                    SB.writeFile (fromAbsFile tfile) (TE.encodeUtf8 (contentsText cts))
+                    rawSystem (fromAbsFile xclipExecutable) ["-in", "-selection", "clipboard", fromAbsFile tfile]
+                case exitCode of
+                  ExitFailure c -> addErrorMessage $ T.pack $ unwords ["xclip failed with exit code:", show c]
+                  ExitSuccess -> pure ()
+          pure ec,
       actionDescription = "Copy the contents of the selected entry to the system clipboard"
     }
 

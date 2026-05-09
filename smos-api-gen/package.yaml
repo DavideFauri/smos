@@ -1,9 +1,12 @@
 name: smos-api-gen
-version: 0.3.1
+version: 0.3.2
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
 license: MIT
+
+extra-source-files:
+- test_resources/**/*
 
 dependencies:
 - base
@@ -40,7 +43,6 @@ tests:
     - containers
     - dirforest
     - genvalidity-sydtest
-    - genvalidity-sydtest-aeson
     - mergeful
     - path
     - semver

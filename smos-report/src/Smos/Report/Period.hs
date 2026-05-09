@@ -1,171 +1,307 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 
+-- TODO: Most of this module can be refactored out as soon as we can use
+-- Data.Time.Calendar's 'DayPeriod' functions.
 module Smos.Report.Period where
 
 import Data.Time
 import Data.Time.Calendar.WeekDate
+import Data.Time.Zones
 import Data.Validity
 import Data.Validity.Time ()
 import GHC.Generics (Generic)
+import OptEnvConf
+import Smos.Data
 import Smos.Report.TimeBlock
 
+-- | A time Period, as specified by a human
 data Period
   = Yesterday
   | Today
   | Tomorrow
   | LastWeek
+  | -- | The 7 days that end in today
+    PastWeek
   | ThisWeek
+  | -- | The 7 days that start today
+    ComingWeek
   | NextWeek
-  | LastMonth -- TODO add year
+  | LastMonth
+  | -- | The 30 days that end in today
+    PastMonth
   | ThisMonth
+  | -- | The 30 days that start today
+    ComingMonth
   | NextMonth
   | LastYear
+  | -- | The 365 days that end in today
+    PastYear
   | ThisYear
+  | -- | The 365 days that start today
+    ComingYear
   | NextYear
   | AllTime
-  | BeginOnly LocalTime
-  | EndOnly LocalTime
-  | BeginEnd LocalTime LocalTime -- If end is before begin, this matches nothing
-  deriving (Show, Eq, Generic)
+  | BeginOnly !Day
+  | EndOnly !Day
+  | BeginEnd !Day !Day -- If end is before begin, this matches nothing
+  deriving (Show, Generic)
 
 instance Validity Period
 
-yearPeriod :: YearNumber -> Period
-yearPeriod y = BeginEnd monthStart monthEnd
-  where
-    monthStart :: LocalTime
-    monthStart = LocalTime (fromGregorian y 1 1) midnight
-    monthEnd :: LocalTime
-    monthEnd = LocalTime (fromGregorian (y + 1) 1 1) midnight
+instance HasParser Period where
+  settingsParser =
+    choice
+      [ parseBeginEnd,
+        setting
+          [ help "yesterday",
+            switch Yesterday,
+            long "yesterday"
+          ],
+        setting
+          [ help "today",
+            switch Today,
+            long "today"
+          ],
+        setting
+          [ help "tomorrow",
+            switch Tomorrow,
+            long "tomorrow"
+          ],
+        setting
+          [ help "last week",
+            switch LastWeek,
+            long "last-week"
+          ],
+        setting
+          [ help "the past week",
+            switch PastWeek,
+            long "past-week"
+          ],
+        setting
+          [ help "this week",
+            switch ThisWeek,
+            long "this-week"
+          ],
+        setting
+          [ help "the coming week",
+            switch ComingWeek,
+            long "coming-week"
+          ],
+        setting
+          [ help "next week",
+            switch NextWeek,
+            long "next-week"
+          ],
+        setting
+          [ help "last month",
+            switch LastMonth,
+            long "last-month"
+          ],
+        setting
+          [ help "the past month",
+            switch PastMonth,
+            long "past-month"
+          ],
+        setting
+          [ help "this month",
+            switch ThisMonth,
+            long "this-month"
+          ],
+        setting
+          [ help "the coming month",
+            switch ComingMonth,
+            long "coming-month"
+          ],
+        setting
+          [ help "next month",
+            switch NextMonth,
+            long "next-month"
+          ],
+        setting
+          [ help "last year",
+            switch LastYear,
+            long "last-year"
+          ],
+        setting
+          [ help "the past year",
+            switch PastYear,
+            long "past-year"
+          ],
+        setting
+          [ help "this year",
+            switch ThisYear,
+            long "this-year"
+          ],
+        setting
+          [ help "the coming year",
+            switch ComingYear,
+            long "coming-year"
+          ],
+        setting
+          [ help "next year",
+            switch NextYear,
+            long "next-year"
+          ],
+        setting
+          [ help "all time",
+            switch AllTime,
+            long "all-time"
+          ]
+      ]
+    where
+      parseBeginEnd :: Parser Period
+      parseBeginEnd =
+        checkMapEitherForgivable
+          ( \case
+              (Nothing, Nothing) -> Left "--begin and --end can't both be omitted."
+              (Just begin, Nothing) -> Right (BeginOnly begin)
+              (Nothing, Just end) -> Right (EndOnly end)
+              (Just begin, Just end) -> Right (BeginEnd begin end)
+          )
+          $ (,)
+            <$> optional
+              ( setting
+                  [ help "start date (inclusive)",
+                    option,
+                    reader $ maybeReader parseBegin,
+                    long "begin",
+                    metavar "DAY"
+                  ]
+              )
+            <*> optional
+              ( setting
+                  [ help "end time (inclusive)",
+                    option,
+                    reader $ maybeReader parseEnd,
+                    long "end",
+                    metavar "DAY"
+                  ]
+              )
+      parseBegin :: String -> Maybe Day
+      parseBegin s = parseLocalDay s
+      parseEnd :: String -> Maybe Day
+      parseEnd s = addDays 1 <$> parseLocalDay s
+      parseLocalDay :: String -> Maybe Day
+      parseLocalDay = parseTimeM True defaultTimeLocale "%F"
 
-monthPeriod :: MonthNumber -> Period
-monthPeriod MonthNumber {..} = BeginEnd monthStart monthEnd
-  where
-    monthStart :: LocalTime
-    monthStart = LocalTime (fromGregorian monthNumberYear monthNumberMonth 1) midnight
-    monthEnd :: LocalTime
-    monthEnd =
-      LocalTime (fromGregorian monthNumberYear (monthNumberMonth + 1) 1) midnight -- FIXME this can wrong at the end of the year
-
-weekPeriod :: WeekNumber -> Period
-weekPeriod WeekNumber {..} = BeginEnd weekStart weekEnd
-  where
-    weekStart :: LocalTime
-    weekStart = LocalTime (fromWeekDate weekNumberYear weekNumberWeek 1) midnight
-    weekEnd :: LocalTime
-    weekEnd =
-      LocalTime (fromWeekDate weekNumberYear (weekNumberWeek + 1) 1) midnight -- FIXME this can wrong at the end of the year
-
-dayPeriod :: Day -> Period
-dayPeriod d = BeginEnd dayStart dayEnd
-  where
-    dayStart = LocalTime {localDay = d, localTimeOfDay = midnight}
-    dayEnd = LocalTime {localDay = addDays 1 d, localTimeOfDay = midnight}
-
-filterPeriodLocal :: ZonedTime -> Period -> LocalTime -> Bool
-filterPeriodLocal now p l =
-  ( case p of
-      AllTime -> const True
-      Yesterday -> filterBetween yesterdayStart yesterdayEnd
-      Today -> filterBetween todayStart todayEnd
-      Tomorrow -> filterBetween tomorrowStart tomorrowEnd
-      LastWeek -> filterBetween lastWeekStart lastWeekEnd
-      ThisWeek -> filterBetween thisWeekStart thisWeekEnd
-      NextWeek -> filterBetween nextWeekStart nextWeekEnd
-      LastMonth -> filterBetween lastMonthStart lastMonthEnd
-      ThisMonth -> filterBetween thisMonthStart thisMonthEnd
-      NextMonth -> filterBetween nextMonthStart nextMonthEnd
-      LastYear -> filterBetween lastYearStart lastYearEnd
-      ThisYear -> filterBetween thisYearStart thisYearEnd
-      NextYear -> filterBetween nextYearStart nextYearEnd
-      BeginOnly begin -> (begin <=)
-      EndOnly end -> (< end)
-      BeginEnd begin end -> filterBetween begin end
-  )
-    l
-  where
-    nowLocal :: LocalTime
-    nowLocal = zonedTimeToLocalTime now
-    today :: Day
-    today = localDay nowLocal
-    filterBetween :: LocalTime -> LocalTime -> LocalTime -> Bool
-    filterBetween start end lt = start <= lt && lt < end
-    yesterdayStart :: LocalTime
-    yesterdayStart = LocalTime {localDay = addDays (-1) today, localTimeOfDay = midnight}
-    yesterdayEnd :: LocalTime
-    yesterdayEnd = todayStart
-    todayStart :: LocalTime
-    todayStart = LocalTime {localDay = today, localTimeOfDay = midnight}
-    todayEnd :: LocalTime
-    todayEnd = nowLocal {localDay = addDays 1 today, localTimeOfDay = midnight}
-    tomorrowStart :: LocalTime
-    tomorrowStart = todayEnd
-    tomorrowEnd :: LocalTime
-    tomorrowEnd = LocalTime {localDay = addDays 2 today, localTimeOfDay = midnight}
-    lastWeekStart :: LocalTime
-    lastWeekStart =
-      let (y, wn, _) = toWeekDate today
-       in LocalTime (fromWeekDate y (wn - 1) 1) midnight -- TODO this will fail around newyear
-    lastWeekEnd :: LocalTime
-    lastWeekEnd = thisWeekStart
-    thisWeekStart :: LocalTime
-    thisWeekStart =
-      let (y, wn, _) = toWeekDate today
-       in LocalTime (fromWeekDate y wn 1) midnight
-    thisWeekEnd :: LocalTime
-    thisWeekEnd =
-      let (y, wn, _) = toWeekDate today
-       in LocalTime (fromWeekDate y (wn + 1) 1) midnight -- FIXME this can wrong at the end of the year
-    nextWeekStart :: LocalTime
-    nextWeekStart = thisWeekEnd
-    nextWeekEnd :: LocalTime
-    nextWeekEnd =
-      let (y, wn, _) = toWeekDate today
-       in LocalTime (fromWeekDate y (wn + 2) 1) midnight -- FIXME this can wrong at the end of the year
-    lastMonthStart :: LocalTime
-    lastMonthStart =
+periodInterval :: Day -> Period -> Interval
+periodInterval today = \case
+  Yesterday -> dayInterval $ addDays (-1) today
+  Today -> dayInterval today
+  Tomorrow -> dayInterval $ addDays 1 today
+  LastWeek ->
+    weekInterval $
+      let (y, w, _) = toWeekDate today
+       in if w == 1 then WeekNumber (pred y) 53 else WeekNumber y (pred w)
+  PastWeek -> Interval (addDays (-7) today) today
+  ThisWeek ->
+    weekInterval $
+      let (y, w, _) = toWeekDate today
+       in WeekNumber y w
+  ComingWeek -> Interval today (addDays 7 today)
+  NextWeek ->
+    weekInterval $
+      let (y, w, _) = toWeekDate today
+       in if w >= 52 then WeekNumber (succ y) 1 else WeekNumber y (succ w)
+  PastMonth -> Interval (addDays (-30) today) today
+  LastMonth ->
+    monthInterval $
       let (y, m, _) = toGregorian today
-       in LocalTime (fromGregorian y (m - 1) 1) midnight -- FIXME This will fail around newyear
-    lastMonthEnd :: LocalTime
-    lastMonthEnd = thisMonthStart
-    thisMonthStart :: LocalTime
-    thisMonthStart =
+       in if m == 1 then MonthNumber (pred y) 12 else MonthNumber y (pred m)
+  ComingMonth -> Interval today (addDays 30 today)
+  ThisMonth ->
+    monthInterval $
       let (y, m, _) = toGregorian today
-       in LocalTime (fromGregorian y m 1) midnight
-    thisMonthEnd :: LocalTime
-    thisMonthEnd =
+       in MonthNumber y m
+  NextMonth ->
+    monthInterval $
       let (y, m, _) = toGregorian today
-       in LocalTime (fromGregorian y m 31) midnight
-    nextMonthStart :: LocalTime
-    nextMonthStart = thisMonthEnd
-    nextMonthEnd :: LocalTime
-    nextMonthEnd =
-      let (y, m, _) = toGregorian today
-       in LocalTime (fromGregorian y (m + 1) 31) midnight -- FIXME This will fail around newyear
-    lastYearStart :: LocalTime
-    lastYearStart =
-      let (y, _, _) = toGregorian today
-       in LocalTime (fromGregorian (y - 1) 1 1) midnight -- FIXME This will fail around newyear
-    lastYearEnd :: LocalTime
-    lastYearEnd = thisYearEnd
-    thisYearStart :: LocalTime
-    thisYearStart =
-      let (y, _, _) = toGregorian today
-       in LocalTime (fromGregorian y 1 1) midnight
-    thisYearEnd :: LocalTime
-    thisYearEnd =
-      let (y, _, _) = toGregorian today
-       in LocalTime (fromGregorian y 12 31) midnight
-    nextYearStart :: LocalTime
-    nextYearStart = thisYearEnd
-    nextYearEnd :: LocalTime
-    nextYearEnd =
-      let (y, _, _) = toGregorian today
-       in LocalTime (fromGregorian (y + 1) 12 31) midnight -- FIXME this will fail around newyear
+       in if m >= 12 then MonthNumber (succ y) 1 else MonthNumber y (succ m)
+  LastYear -> yearInterval $ succ $ dayYear today
+  PastYear -> Interval (addDays (-365) today) today
+  ThisYear -> yearInterval $ dayYear today
+  ComingYear -> Interval today (addDays 365 today)
+  NextYear -> yearInterval $ succ $ dayYear today
+  AllTime -> EverythingInterval
+  BeginOnly begin -> BeginOnlyInterval begin
+  EndOnly end -> EndOnlyInterval end
+  BeginEnd begin end -> Interval begin end
 
-filterPeriod :: ZonedTime -> Period -> UTCTime -> Bool
-filterPeriod now p u =
-  let tz :: TimeZone
-      tz = zonedTimeZone now
-   in filterPeriodLocal now p $ utcToLocalTime tz u
+-- | An interval of time.
+data Interval
+  = -- | Unbounded interval
+    EverythingInterval
+  | -- | An interval that's only bounded on the begin side
+    BeginOnlyInterval !Day
+  | -- | An interval that's only bounded on the end side
+    EndOnlyInterval !Day
+  | -- | Interval bounded on both sides
+    -- It is half open, open on the end.
+    -- I.e. Interval a b represents [a .. b)
+    Interval !Day !Day
+  deriving (Show, Eq, Generic)
+
+instance Validity Interval
+
+filterIntervalUTCTime :: TZ -> Interval -> UTCTime -> Bool
+filterIntervalUTCTime zone interval ut = filterIntervalLocalTime interval $ utcToLocalTimeTZ zone ut
+
+filterIntervalTimestamp :: Interval -> Timestamp -> Bool
+filterIntervalTimestamp interval timestamp = filterIntervalDay interval $ timestampDay timestamp
+
+filterIntervalLocalTime :: Interval -> LocalTime -> Bool
+filterIntervalLocalTime interval lt = filterIntervalDay interval (localDay lt)
+
+-- | Check whether a given 'Interval' contains a given 'Day'
+filterIntervalDay :: Interval -> Day -> Bool
+filterIntervalDay i d = case i of
+  EverythingInterval -> True
+  BeginOnlyInterval begin -> begin <= d
+  EndOnlyInterval end -> d < end
+  Interval begin end -> begin <= d && d < end
+
+intervalTuple :: Interval -> (Maybe Day, Maybe Day)
+intervalTuple = \case
+  EverythingInterval -> (Nothing, Nothing)
+  BeginOnlyInterval begin -> (Just begin, Nothing)
+  EndOnlyInterval end -> (Nothing, Just end)
+  Interval begin end -> (Just begin, Just end)
+
+-- An 'Interval' representing the given 'Year'
+yearInterval :: YearNumber -> Interval
+yearInterval y = Interval yearStart nextYearStart
+  where
+    yearStart :: Day
+    yearStart = fromGregorian y 1 1
+    nextYearStart :: Day
+    nextYearStart = fromGregorian (succ y) 1 1
+
+-- An 'Interval' representing the given 'Month'
+monthInterval :: MonthNumber -> Interval
+monthInterval MonthNumber {..} = Interval monthStart nextMonthStart
+  where
+    monthStart :: Day
+    monthStart = fromGregorian monthNumberYear monthNumberMonth 1
+    nextMonthStart :: Day
+    nextMonthStart =
+      if monthNumberMonth == 12
+        then fromGregorian (succ monthNumberYear) 1 1
+        else fromGregorian monthNumberYear (succ monthNumberMonth) 1
+
+-- An 'Interval' representing the given 'Week'
+weekInterval :: WeekNumber -> Interval
+weekInterval WeekNumber {..} = Interval weekStart nextWeekStart
+  where
+    weekStart :: Day
+    weekStart = fromWeekDate weekNumberYear weekNumberWeek 1
+    nextWeekStart :: Day
+    nextWeekStart =
+      case fromWeekDateValid weekNumberYear (weekNumberWeek + 1) 1 of
+        Nothing -> fromWeekDate (succ weekNumberYear) 1 1
+        Just d -> d
+
+-- An 'Interval' representing the given 'Day'
+dayInterval :: Day -> Interval
+dayInterval d = Interval d (addDays 1 d)

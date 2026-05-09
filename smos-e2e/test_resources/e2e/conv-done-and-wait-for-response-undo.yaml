@@ -1,0 +1,7 @@
+before:
+- hello
+commands:
+- ' nw'
+- 'u'
+after:
+- hello

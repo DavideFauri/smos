@@ -1,5 +1,5 @@
 name: smos-data-gen
-version: 0.3.2
+version: 0.5.1
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
@@ -21,11 +21,12 @@ library:
   - genvalidity-text
   - genvalidity-time
   - path-io
-  - semver
+  - containers
   - smos-data
   - sydtest
   - text
   - time
+  - tz
 
 tests:
   smos-data-test:

@@ -7,12 +7,15 @@ description: An overview of Smos' features
 
 Smos is a comprehensive system for implementing self-management as a power-user.
 
-<asciinema-player
-  src="/casts/basics.cast"
-  autoplay="true"
-  preloop="true"
-  loop="true">
-  </asciinema-player>
+<div id="cast"></div>
+<script src=/assets/asciinema-player.js></script>
+<script>
+  AsciinemaPlayer.create('/web-assets/basics.cast', document.getElementById('cast'), {
+    autoPlay: true,
+    preload: true,
+    loop: true,
+  });
+</script>
 
 ## Completely customisable
 
@@ -67,4 +70,4 @@ You can write your own tools to operate on these files.
 
 Files are made to make diffs easy and disjoint.
 Derived data is never stored, but instead computed or rendered.
-There is also built-in sychronisation using `smos-sync-client`.
+There is also built-in sychronisation using `smos-sync`.

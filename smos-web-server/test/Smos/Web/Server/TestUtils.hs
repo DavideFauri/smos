@@ -3,22 +3,21 @@
 
 module Smos.Web.Server.TestUtils where
 
-import Control.Concurrent.STM
 import Control.Monad.IO.Class
 import Control.Monad.Logger
-import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Network.HTTP.Client as Http
 import Network.HTTP.Types
+import Path.IO
 import Servant.Client
 import Smos.Client
 import Smos.Data.Gen ()
 import qualified Smos.Server.TestUtils as API
+import Smos.Web.Assets
 import Smos.Web.Server.Application ()
 import Smos.Web.Server.Foundation
 import Smos.Web.Server.Static
-import Smos.Web.Style
 import Test.QuickCheck
 import Test.Syd
 import Test.Syd.Path
@@ -37,20 +36,18 @@ webServerSetupFunc man cenv = webServerSetupFunc' cenv >>= yesodClientSetupFunc 
 
 webServerSetupFunc' :: ClientEnv -> SetupFunc App
 webServerSetupFunc' cenv = do
-  tdir <- tempDirSetupFunc "smos-web-server-test-data-dir"
-  loginVar <- liftIO $ newTVarIO M.empty
+  tdir <- tempDirSetupFunc "smos-web-server-test"
+  sessionKeyFile <- liftIO $ resolveFile tdir "client_session_key.aes"
   pure
     App
       { appLogLevel = LevelWarn,
         appStatic = smosWebServerStatic,
-        appStyle = smosWebStyle,
-        appAPIBaseUrl = baseUrl cenv,
+        appWebAssets = smosWebAssets,
+        appAPIClientEnv = cenv,
         appDocsBaseUrl = Nothing,
-        appLoginTokens = loginVar,
-        appDataDir = tdir,
-        appHttpManager = manager cenv,
         appGoogleAnalyticsTracking = Nothing,
-        appGoogleSearchConsoleVerification = Nothing
+        appGoogleSearchConsoleVerification = Nothing,
+        appSessionKeyFile = sessionKeyFile
       }
 
 loginTo :: Username -> Text -> YesodExample App ()
@@ -66,6 +63,14 @@ loginTo username passphrase = do
   statusIs 303
   loc <- getLocation
   liftIO $ loc `shouldBe` Right HomeR
+
+logout :: YesodClientM App ()
+logout = do
+  post $ AuthR LogoutR
+  statusIs 303
+  locationShouldBe HomeR
+  _ <- followRedirect
+  statusIs 200
 
 withAnyFreshAccount_ :: YesodClient App -> YesodClientM App () -> Property
 withAnyFreshAccount_ yc func = withAnyFreshAccount yc (\_ _ -> func)

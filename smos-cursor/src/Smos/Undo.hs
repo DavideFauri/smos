@@ -20,9 +20,9 @@ import GHC.Generics (Generic)
 newtype UndoStack a = UndoStack {undoStackListCursor :: ListCursor a}
   deriving (Show, Eq, Generic)
 
-instance Validity a => Validity (UndoStack a)
+instance (Validity a) => Validity (UndoStack a)
 
-instance NFData a => NFData (UndoStack a)
+instance (NFData a) => NFData (UndoStack a)
 
 emptyUndoStack :: UndoStack a
 emptyUndoStack = UndoStack {undoStackListCursor = emptyListCursor}
@@ -40,9 +40,3 @@ undoStackUndo (UndoStack lc) = do
 undoStackRedo :: UndoStack a -> Maybe (a, UndoStack a)
 undoStackRedo (UndoStack lc) = do
   (,) <$> listCursorNextItem lc <*> (UndoStack <$> listCursorSelectNext lc)
-
-undoStackUndoLength :: UndoStack a -> Word
-undoStackUndoLength = fromIntegral . length . listCursorPrev . undoStackListCursor
-
-undoStackRedoLength :: UndoStack a -> Word
-undoStackRedoLength = fromIntegral . length . listCursorNext . undoStackListCursor

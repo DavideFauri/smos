@@ -1,6 +1,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Smos.Web.Server.SmosSession where
 
@@ -10,83 +11,96 @@ import qualified Data.Text as T
 import Database.Persist.Sqlite as DB
 import Path
 import Path.IO
+import Smos.CLI.Logging
 import Smos.Client hiding (Header)
-import Smos.Config
 import Smos.Default
+import Smos.Directory.OptParse
 import Smos.Instance
+import Smos.Report.OptParse
 import Smos.Sync.Client.Command.Sync
-import Smos.Sync.Client.OptParse.Types
+import Smos.Sync.Client.OptParse
 import Smos.Terminal
 import Smos.Types
 import Smos.Web.Server.Foundation
 import UnliftIO hiding (Handler)
 import Yesod hiding (Header)
 
--- TODO refactor this together with 'withSmosSession' because the only difference is the dir.
 withPlaygroundSession ::
   (MonadUnliftIO m) =>
   Path Rel File ->
   (TerminalHandle -> m a) ->
   m a
 withPlaygroundSession relFile func =
-  withPlaygroundDir $ \workflowDir -> withSmosSessionIn workflowDir relFile func
+  withPlaygroundDir $ \workflowDir ->
+    withSmosSessionIn workflowDir (StartingFile $ workflowDir </> relFile) func
 
+{-# ANN withPlaygroundDir ("NOCOVER" :: String) #-}
 withPlaygroundDir :: forall m a. (MonadUnliftIO m) => (Path Abs Dir -> m a) -> m a
 withPlaygroundDir func = withRunInIO $ \runInIO ->
   withSystemTempDir "smos-web-server-playground" $ \tempDir ->
-    runInIO $ bracket_ (ensureDir tempDir) (removeDirRecur tempDir) (func (toWorkflowDir tempDir))
-  where
-    toWorkflowDir :: Path Abs Dir -> Path Abs Dir
-    toWorkflowDir = (</> [reldir|workflow|])
+    runInIO $
+      bracket_
+        (ensureDir tempDir)
+        (removeDirRecur tempDir)
+        (func (toWorkflowDir tempDir))
+
+toWorkflowDir :: Path Abs Dir -> Path Abs Dir
+toWorkflowDir = (</> [reldir|workflow|])
 
 withSmosSession ::
   (MonadUnliftIO m, MonadHandler m, HandlerSite m ~ App) =>
-  Username ->
   Token ->
-  Path Rel File ->
   (TerminalHandle -> m a) ->
   m a
-withSmosSession userName token relFile func =
-  withReadiedDir userName token $ \workflowDir -> withSmosSessionIn workflowDir relFile func
+withSmosSession token func =
+  withReadiedDir token $ \workflowDir ->
+    withSmosSessionIn workflowDir (StartingDir workflowDir) func
 
 withSmosSessionIn ::
-  MonadUnliftIO m =>
+  (MonadUnliftIO m) =>
   Path Abs Dir ->
-  Path Rel File ->
+  StartingPath ->
   (TerminalHandle -> m a) ->
   m a
-withSmosSessionIn workflowDir relFile func = do
-  let startingFile = workflowDir </> relFile
+withSmosSessionIn workflowDir sp func = do
   let reportConfig = reportConfigFor workflowDir
   let config =
         defaultConfig
-          { configReportConfig = reportConfig,
-            configExplainerMode = True
+          { configReportSettings = reportConfig,
+            configExplainerMode = True,
+            configSandboxMode = True
           }
-  withSmosInstance config (Just $ StartingFile startingFile) func
+  withSmosInstance config (Just sp) func
 
 reportConfigFor ::
-  Path Abs Dir -> SmosReportConfig
+  Path Abs Dir -> ReportSettings
 reportConfigFor workflowDir =
-  defaultReportConfig
-    { smosReportConfigDirectoryConfig = directoryConfigFor workflowDir
+  defaultReportSettings
+    { reportSettingDirectorySettings = directoryConfigFor workflowDir
     }
 
 directoryConfigFor ::
-  Path Abs Dir -> DirectoryConfig
+  Path Abs Dir -> DirectorySettings
 directoryConfigFor workflowDir =
-  defaultDirectoryConfig
+  defaultDirectorySettings
     { directoryConfigWorkflowFileSpec = AbsoluteWorkflow workflowDir
     }
 
-withReadiedDir :: forall m a. (MonadUnliftIO m, MonadHandler m, HandlerSite m ~ App) => Username -> Token -> (Path Abs Dir -> m a) -> m a
-withReadiedDir userName token func = bracket readyDir unreadyDir (func . toWorkflowDir)
+{-# ANN withReadiedDir ("NOCOVER" :: String) #-}
+withReadiedDir ::
+  forall m a.
+  (MonadUnliftIO m, MonadHandler m, HandlerSite m ~ App) =>
+  Token ->
+  (Path Abs Dir -> m a) ->
+  m a
+withReadiedDir token func =
+  withRunInIO $ \runInIO ->
+    withSystemTempDir "smos-web-server-user-workflow" $ \dir ->
+      runInIO $
+        bracket (readyDir dir) unreadyDir (func . toWorkflowDir)
   where
-    toWorkflowDir :: Path Abs Dir -> Path Abs Dir
-    toWorkflowDir = (</> [reldir|workflow|])
-    readyDir :: m (Path Abs Dir)
-    readyDir = do
-      userDir <- userDataDir userName
+    readyDir :: Path Abs Dir -> m (Path Abs Dir)
+    readyDir userDir = do
       let workflowDir = toWorkflowDir userDir
       ensureDir workflowDir
       doSync userDir
@@ -100,12 +114,10 @@ withReadiedDir userName token func = bracket readyDir unreadyDir (func . toWorkf
       backupDir <- resolveDir userDir "sync-conflict-backups"
       dbFile <- resolveFile userDir "sync-metadata.sqlite3"
       uuidFile <- resolveFile userDir "server-uuid.json"
-      man <- getsYesod appHttpManager
-      burl <- getsYesod appAPIBaseUrl
-      let cenv = mkClientEnv man burl
+      cenv <- getsYesod appAPIClientEnv
       liftIO $
-        runStderrLoggingT $
-          filterLogger (\_ ll -> ll >= LevelWarn) $
-            DB.withSqlitePool (T.pack $ fromAbsFile dbFile) 1 $
-              \pool ->
-                doActualSync uuidFile pool workflowDir IgnoreHiddenFiles backupDir cenv token
+        runFilteredLogger LevelWarn $
+          DB.withSqlitePool (T.pack $ fromAbsFile dbFile) 1 $ \pool -> do
+            ensureDir workflowDir
+            doActualSync uuidFile pool workflowDir IgnoreHiddenFiles backupDir cenv token
+      removeEmptyDirs workflowDir

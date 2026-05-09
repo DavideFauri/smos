@@ -34,6 +34,9 @@
         Building/Installation
       <ul>
         <li>
+          <a href=@{PageR ["installation", "download"]}>
+            Download Release
+        <li>
           <a href=@{PageR ["installation", "stack"]}>
             Building with Stack
         <li>
@@ -56,7 +59,7 @@
 
     <li>
       <a href=@{SmosR}>
-        The Smos TUI
+        TUI
       <ul>
         <li>
           <a href=@{PageR ["customisation-default"]}>
@@ -76,7 +79,7 @@
 
     <li>
       <a href=@{SmosQueryR}>
-        The Smos Query Tool
+        Query
       <ul>
         <li>
           <a href=@{SmosQueryCommandR "next"}>
@@ -97,8 +100,14 @@
           <a href=@{SmosQueryCommandR "waiting"}>
             Waiting report
         <li>
+          <a href=@{SmosQueryCommandR "ongoing"}>
+            Ongoing report
+        <li>
           <a href=@{SmosQueryCommandR "clock"}>
             Clock report
+        <li>
+          <a href=@{SmosQueryCommandR "free"}>
+            Free report
         <li>
           <a href=@{SmosQueryCommandR "log"}>
             Log report
@@ -126,7 +135,7 @@
 
     <li>
       <a href=@{SmosArchiveR}>
-        The Smos Archiving Tool
+        Archiving
       <ul>
         <li>
           <a href=@{SmosArchiveCommandR "file"}>
@@ -137,12 +146,24 @@
 
     <li>
       <a href=@{SmosSingleR}>
-        The Smos Single Tool
+        Single
 
     <li>
       <a href=@{SmosSchedulerR}>
-        The Smos Scheduler Tool
+        Scheduler
       <ul>
+        <li>
+          <a href=@{SmosSchedulerCommandR "check"}>
+            Check
+        <li>
+          <a href=@{SmosSchedulerCommandR "sample"}>
+            Sample
+        <li>
+          <a href=@{SmosSchedulerCommandR "schedule"}>
+            Schedule
+        <li>
+          <a href=@{SmosSchedulerCommandR "next"}>
+            Next
         <li>
           <a href=@{SmosSchedulerTemplateR}>
             Template format
@@ -152,7 +173,7 @@
 
     <li>
       <a href=@{SmosNotifyR}>
-        The Smos Notify Tool
+        Notifications
       <ul>
         <li>
           <a href=@{PageR ["smos-notify", "nixos"]}>
@@ -160,29 +181,26 @@
 
     <li>
       <a href=@{SmosCalendarImportR}>
-        The Smos Calendar Import Tool
+        Calendar Import
       <ul>
         <li>
           <a href=@{PageR ["smos-calendar-import", "nixos"]}>
             Running on NixOs
 
     <li>
-      <a href=@{SmosSyncClientR}>
-        The Smos Sync Client
+      <a href=@{SmosSyncR}>
+        Sync
       <ul>
         <li>
-          <a href=@{PageR ["synchronisation"]}>
+          <a href=@{SmosSyncCommandR "sync"}>
             Synchronisation
         <li>
-          <a href=@{PageR ["smos-sync-client", "nixos"]}>
+          <a href=@{SmosSyncNixosR}>
             Running on NixOs
-        <li>
-          <a href=@{PageR ["smos-sync-client", "database-migration"]}>
-            Database migration: manual intervention required
 
     <li>
       <a href=@{SmosGitHubR}>
-        The Smos GitHub Tool
+        GitHub
       <ul>
         <li>
           <a href=@{SmosGitHubCommandR "list"}>
@@ -192,12 +210,23 @@
             Import command
 
     <li>
+      <a href=@{SmosJobHuntR}>
+        JobHunt
+      <ul>
+        <li>
+          <a href=@{SmosJobHuntCommandR "init"}>
+            Init
+        <li>
+          <a href=@{SmosJobHuntCommandR "email"}>
+            Send email
+
+    <li>
       <a href=@{PageR ["smos-api"]}>
-        The Smos API
+        API
 
     <li>
       <a href=@{SmosServerR}>
-        The Smos Server
+        API Server
       <ul>
         <li>
           <a href=@{PageR ["smos-server", "nixos"]}>
@@ -208,7 +237,7 @@
 
     <li>
       <a href=@{SmosWebServerR}>
-        The Smos Web Server
+        Web Server
       <ul>
         <li>
           <a href=@{PageR ["smos-web-server", "nixos"]}>

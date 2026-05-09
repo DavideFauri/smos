@@ -1,7 +1,7 @@
 loops:
   ci:
     description: Keep CI passing locally
-    command: nix-build ci.nix --no-out-link
+    command: nix flake check
 
   server-e2e:
     description: Work on the server's end-to-end tests
@@ -21,17 +21,21 @@ loops:
   web-server:
     description: Work on the web server
     script: |
+      set -e
       stack install smos-server smos-web-server
       killall smos-server >/dev/null 2>&1 || true
       killall smos-web-server >/dev/null 2>&1 || true
       ~/.local/bin/smos-server & disown
       sleep 0.5
-      ~/.local/bin/smos-web-server
+      ~/.local/bin/smos-web-server & disown
     working-dir: smos-web-server
     env:
       DEVELOPMENT: 'True'
+      # SMOS_SERVER_AUTO_BACKUP_ENABLED: 'False'
+      SMOS_SERVER_BACKUP_GARBAGE_COLLECTOR_ENABLED: 'False'
+      SMOS_SERVER_FILE_MIGRATOR_ENABLED: 'False'
       SMOS_SERVER_LOG_LEVEL: 'Debug'
-      SMOS_SERVER_ADMIN: 'admin'
+      SMOS_SERVER_ADMIN: 'syd'
       SMOS_WEB_SERVER_API_URL: 'http://localhost:8000'
       SMOS_WEB_SERVER_PORT: '8080'
       SMOS_WEB_SERVER_WEB_URL: 'http://localhost:8080'

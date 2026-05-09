@@ -10,7 +10,6 @@ module Smos.Style
     nonSmosFileAttr,
     dirAttr,
     headerAttr,
-    contentsAttr,
     todoStateAttr,
     todoStateSpecificAttr,
     todoStateHistoryAttr,
@@ -46,7 +45,6 @@ import Brick.Util as B
 import qualified Data.Text as T
 import qualified Graphics.Vty as V
 import Graphics.Vty.Attributes
-import Import
 import Smos.Data
 
 defaultAttrMap :: s -> AttrMap
@@ -63,6 +61,7 @@ defaultAttrMap _ =
           (todoStateSpecificAttr "DONE", fg green),
           (todoStateSpecificAttr "CANCELLED", fg green),
           (todoStateSpecificAttr "FAILED", fg brightRed),
+          (timestampNameSpecificAttr "AFTER", fg blue),
           (timestampNameSpecificAttr "BEGIN", fg brown),
           (timestampNameSpecificAttr "END", fg brown),
           (timestampNameSpecificAttr "SCHEDULED", fg orange),
@@ -70,8 +69,9 @@ defaultAttrMap _ =
           (propertyNameSpecificAttr "assignee", fg blue),
           (propertyNameSpecificAttr "brainpower", fg brown),
           (propertyNameSpecificAttr "client", fg green),
-          (propertyNameSpecificAttr "estimate", fg green),
+          (propertyNameSpecificAttr "email_address", fg yellow),
           (propertyNameSpecificAttr "goal", fg orange),
+          (propertyNameSpecificAttr "phone_number", fg yellow),
           (propertyNameSpecificAttr "timewindow", fg magenta),
           (propertyNameSpecificAttr "url", fg green),
           (propertyNameSpecificAttr "waiting_threshold", fg blue),
@@ -95,7 +95,7 @@ defaultAttrMap _ =
           defAttr
           [ (selectedAttr, fg V.white),
             (savedAttr, fg green),
-            (unsavedAttr, fg orange),
+            (unsavedAttr, fg white),
             (keyAttr, fg orange),
             (headerAttr, fg V.yellow),
             (helpNameAttr, fg V.yellow),
@@ -105,91 +105,88 @@ defaultAttrMap _ =
           ]
 
 fileAttr :: AttrName
-fileAttr = "file"
+fileAttr = attrName "file"
 
 nonSmosFileAttr :: AttrName
-nonSmosFileAttr = "non-smos-file"
+nonSmosFileAttr = attrName "non-smos-file"
 
 dirAttr :: AttrName
-dirAttr = "dir"
+dirAttr = attrName "dir"
 
 selectedAttr :: AttrName
-selectedAttr = "selected"
+selectedAttr = attrName "selected"
 
 savedAttr :: AttrName
-savedAttr = "saved"
+savedAttr = attrName "saved"
 
 unsavedAttr :: AttrName
-unsavedAttr = "unsaved"
+unsavedAttr = attrName "unsaved"
 
 keyAttr :: AttrName
-keyAttr = "key"
+keyAttr = attrName "key"
 
 headerAttr :: AttrName
-headerAttr = "header"
-
-contentsAttr :: AttrName
-contentsAttr = "contents"
+headerAttr = attrName "header"
 
 todoStateAttr :: AttrName
-todoStateAttr = "todostate"
+todoStateAttr = attrName "todostate"
 
 todoStateSpecificAttr :: TodoState -> AttrName
-todoStateSpecificAttr tss = fromString $ "todostate-" ++ T.unpack (todoStateText tss)
+todoStateSpecificAttr tss = attrName $ "todostate-" ++ T.unpack (todoStateText tss)
 
 todoStateHistoryAttr :: AttrName
-todoStateHistoryAttr = "todostatehistory"
+todoStateHistoryAttr = attrName "todostatehistory"
 
 timestampNameSpecificAttr :: TimestampName -> AttrName
-timestampNameSpecificAttr tsn = fromString $ "timestampname-" ++ T.unpack (timestampNameText tsn)
+timestampNameSpecificAttr tsn = attrName $ "timestampname-" ++ T.unpack (timestampNameText tsn)
 
 propertyNameSpecificAttr :: PropertyName -> AttrName
-propertyNameSpecificAttr pn = fromString $ "propertyname-" ++ T.unpack (propertyNameText pn)
+propertyNameSpecificAttr pn = attrName $ "propertyname-" ++ T.unpack (propertyNameText pn)
 
 tagAttr :: AttrName
-tagAttr = "tag"
+tagAttr = attrName "tag"
 
 tagSpecificAttr :: Tag -> AttrName
-tagSpecificAttr t = fromString $ "tag-" ++ T.unpack (tagText t)
+tagSpecificAttr t = attrName $ "tag-" ++ T.unpack (tagText t)
 
 projectionHeaderAttr :: AttrName
-projectionHeaderAttr = "projection-header"
+projectionHeaderAttr = attrName "projection-header"
 
 waitingReportLongWait :: AttrName
-waitingReportLongWait = "waiting-report-long-wait"
+waitingReportLongWait = attrName "waiting-report-long-wait"
 
 waitingReportMidWait :: AttrName
-waitingReportMidWait = "waiting-report-mid-wait"
+waitingReportMidWait = attrName "waiting-report-mid-wait"
 
 waitingReportShortWait :: AttrName
-waitingReportShortWait = "waiting-report-short-wait"
+waitingReportShortWait = attrName "waiting-report-short-wait"
 
 waitingReportNoWait :: AttrName
-waitingReportNoWait = "waiting-report-no-wait"
+waitingReportNoWait = attrName "waiting-report-no-wait"
 
 agendaReportRelativeAttr :: AttrName
-agendaReportRelativeAttr = "agenda-report-relative-time"
+agendaReportRelativeAttr = attrName "agenda-report-relative-time"
 
 agendaReportNowLineAttr :: AttrName
-agendaReportNowLineAttr = "agenda-report-now-line"
+agendaReportNowLineAttr = attrName "agenda-report-now-line"
 
 relativeTimestampAccentAttr :: AttrName
-relativeTimestampAccentAttr = "relative-timestamp-accent"
+relativeTimestampAccentAttr = attrName "relative-timestamp-accent"
 
 workReportTitleAttr :: AttrName
-workReportTitleAttr = "work-report-title"
+workReportTitleAttr = attrName "work-report-title"
 
 workReportWarningAttr :: AttrName
-workReportWarningAttr = "work-report-warning"
+workReportWarningAttr = attrName "work-report-warning"
 
 helpNameAttr :: AttrName
-helpNameAttr = "helpdescription"
+helpNameAttr = attrName "helpdescription"
 
 helpKeyCombinationAttr :: AttrName
-helpKeyCombinationAttr = "helpkeycombination"
+helpKeyCombinationAttr = attrName "helpkeycombination"
 
 helpDescriptionAttr :: AttrName
-helpDescriptionAttr = "helpdescription"
+helpDescriptionAttr = attrName "helpdescription"
 
 errorAttr :: AttrName
-errorAttr = "error"
+errorAttr = attrName "error"

@@ -10,11 +10,11 @@ module Smos.Web.Server.Handler.Account
   )
 where
 
-import Control.Monad.Except
 import Smos.Web.Server.Handler.Import
 
 getAccountR :: Handler Html
 getAccountR = withLogin' $ \un t -> do
+  isAdmin <- runClientOrErr $ userPermissionsIsAdmin <$> clientGetUserPermissions t
   mMonetisation <- runClientOrErr clientGetMonetisation
   status <- runClientOrErr $ clientGetUserSubscription t
   now <- liftIO getCurrentTime
@@ -23,8 +23,8 @@ getAccountR = withLogin' $ \un t -> do
     $(widgetFile "account")
 
 postAccountDeleteR :: Handler ()
-postAccountDeleteR = withLogin' $ \un t -> do
+postAccountDeleteR = withLogin $ \t -> do
   NoContent <- runClientOrErr $ clientDeleteUser t
   addMessage "is-success" "Account succesfully deleted."
-  deleteLoginToken un
+  clearUserToken
   clearCreds True

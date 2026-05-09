@@ -19,11 +19,11 @@ import Data.Validity.Time ()
 import GHC.Generics
 import Path
 import Smos.Data
-import Smos.Report.Archive
-import Smos.Report.Config
+import Smos.Directory.Archive
+import Smos.Directory.OptParse
+import Smos.Directory.ShouldPrint
+import Smos.Directory.Streaming
 import Smos.Report.Filter
-import Smos.Report.ShouldPrint
-import Smos.Report.Streaming
 import Smos.Report.Time as Report
 
 newtype WaitingReport = WaitingReport
@@ -42,10 +42,10 @@ instance Validity WaitingReport where
 instance HasCodec WaitingReport where
   codec = dimapCodec WaitingReport waitingReportEntries codec
 
-produceWaitingReport :: MonadIO m => Maybe EntryFilter -> HideArchive -> ShouldPrint -> DirectoryConfig -> m WaitingReport
+produceWaitingReport :: (MonadIO m) => Maybe EntryFilter -> HideArchive -> ShouldPrint -> DirectorySettings -> m WaitingReport
 produceWaitingReport ef ha sp dc = produceReport ha sp dc (waitingReportConduit ef)
 
-waitingReportConduit :: Monad m => Maybe EntryFilter -> ConduitT (Path Rel File, SmosFile) void m WaitingReport
+waitingReportConduit :: (Monad m) => Maybe EntryFilter -> ConduitT (Path Rel File, SmosFile) void m WaitingReport
 waitingReportConduit ef =
   finishWaitingReport
     <$> ( waitingReportConduitHelper ef
@@ -53,10 +53,10 @@ waitingReportConduit ef =
             .| sinkList
         )
 
-waitingReportConduitHelper :: Monad m => Maybe EntryFilter -> ConduitT (Path Rel File, SmosFile) (Path Rel File, ForestCursor Entry) m ()
+waitingReportConduitHelper :: (Monad m) => Maybe EntryFilter -> ConduitT (Path Rel File, SmosFile) (Path Rel File, ForestCursor Entry) m ()
 waitingReportConduitHelper ef =
   smosFileCursors
-    .| smosFilter (maybe isWaitingFilter (FilterAnd isWaitingFilter) ef)
+    .| filterConduit (maybe isWaitingFilter (FilterAnd isWaitingFilter) ef)
   where
     isWaitingFilter :: EntryFilter
     isWaitingFilter = FilterSnd $ FilterWithinCursor $ FilterEntryTodoState $ FilterMaybe False $ FilterSub waitingState

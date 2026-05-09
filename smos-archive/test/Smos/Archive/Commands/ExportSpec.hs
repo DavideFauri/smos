@@ -14,12 +14,13 @@ import Path.IO
 import Smos.Archive.Commands.Export
 import Smos.Archive.Commands.File
 import Smos.Archive.Env
-import Smos.Archive.OptParse.Types
+import Smos.Archive.OptParse
 import Smos.Data
 import Smos.Data.Gen ()
-import Smos.Report.Config
+import Smos.Directory.InterestingStore
+import Smos.Directory.OptParse
+import Smos.Directory.Resolution
 import Smos.Report.Filter
-import Smos.Report.InterestingStore
 import Smos.Report.Period
 import Test.Syd
 import Test.Syd.Path
@@ -39,7 +40,7 @@ spec = modifyMaxShrinks (const 0) $
           let settings =
                 Settings
                   { setDirectorySettings =
-                      defaultDirectoryConfig
+                      defaultDirectorySettings
                         { directoryConfigWorkflowFileSpec = AbsoluteWorkflow workflowDir
                         },
                     setLogLevel = LevelWarn
@@ -48,9 +49,10 @@ spec = modifyMaxShrinks (const 0) $
                 ExportSettings
                   { exportSetExportDir = actualExportDir,
                     exportSetPeriod =
-                      BeginEnd
-                        (LocalTime (fromGregorian 2019 01 01) midnight)
-                        (LocalTime (fromGregorian 2020 01 01) midnight),
+                      Just $
+                        BeginEnd
+                          (fromGregorian 2019 01 01)
+                          (fromGregorian 2020 01 01),
                     exportSetFilter = Just $ FilterFile [relfile|client|],
                     exportSetAlsoDeleteOriginals = False
                   }
@@ -66,7 +68,7 @@ spec = modifyMaxShrinks (const 0) $
           -- Empty smos file because then there is definitely no prompt about not-done entries
           writeSmosFile exampleProjectFile emptySmosFile
           let dc =
-                defaultDirectoryConfig
+                defaultDirectorySettings
                   { directoryConfigWorkflowFileSpec = AbsoluteWorkflow workflowDir
                   }
               settings =
@@ -83,7 +85,7 @@ spec = modifyMaxShrinks (const 0) $
           let exportSettings =
                 ExportSettings
                   { exportSetExportDir = actualExportDir,
-                    exportSetPeriod = AllTime,
+                    exportSetPeriod = Nothing,
                     exportSetFilter = Nothing,
                     exportSetAlsoDeleteOriginals = False
                   }
@@ -102,7 +104,7 @@ spec = modifyMaxShrinks (const 0) $
             let settings =
                   Settings
                     { setDirectorySettings =
-                        defaultDirectoryConfig
+                        defaultDirectorySettings
                           { directoryConfigWorkflowFileSpec = AbsoluteWorkflow workflowDir
                           },
                       setLogLevel = LevelWarn
@@ -111,7 +113,7 @@ spec = modifyMaxShrinks (const 0) $
             let exportSettings =
                   ExportSettings
                     { exportSetExportDir = actualExportDir,
-                      exportSetPeriod = AllTime,
+                      exportSetPeriod = Nothing,
                       exportSetFilter = Nothing,
                       exportSetAlsoDeleteOriginals = True
                     }

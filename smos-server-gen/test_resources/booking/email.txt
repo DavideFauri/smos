@@ -1,0 +1,21 @@
+ACTION REQUIRED: Add this event it to your calendar
+Some calendar providers, notably Google and Microsoft, do not automatically add calendar invites to your calendar.
+
+
+This is a calendar invite from Example Client Name (client@example.com) for Example User Name (user@example.com).
+
+This is extra info for the user
+On
+Multiple
+Lines.
+
+For Example User Name:
+Thursday 13:00 2023-06-22
+(Europe/Zurich)
+
+For Example Client Name:
+Thursday 05:00 2023-06-22
+(America/Denver)
+
+
+Attached is an .ics file that contains the calendar invitation.

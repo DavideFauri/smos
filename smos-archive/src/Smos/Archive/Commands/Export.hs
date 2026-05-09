@@ -4,6 +4,7 @@
 module Smos.Archive.Commands.Export (smosArchiveExport) where
 
 import Conduit
+import Control.Monad
 import Control.Monad.Logger
 import Control.Monad.Reader
 import qualified Data.ByteString as SB
@@ -16,11 +17,11 @@ import Path
 import Path.IO
 import Smos.Archive.Commands.File (archiveTimeFormat)
 import Smos.Archive.Env
-import Smos.Archive.OptParse.Types
-import Smos.Report.Config
+import Smos.Archive.OptParse
+import Smos.Directory.Resolution
+import Smos.Directory.Streaming
 import Smos.Report.Filter
 import Smos.Report.Period
-import Smos.Report.Streaming
 import UnliftIO.IO.File
 
 smosArchiveExport :: ExportSettings -> A ()
@@ -28,6 +29,9 @@ smosArchiveExport ExportSettings {..} = do
   dc <- asks setDirectorySettings
   archiveDir <- liftIO $ resolveDirArchiveDir dc
   now <- liftIO getZonedTime
+  let today = localDay $ zonedTimeToLocalTime now
+  let period = fromMaybe AllTime exportSetPeriod
+  let interval = periodInterval today period
   let exportFile fp = do
         (withoutExtension, _) <- splitExtension (filename fp)
         let lastPieces = case map T.unpack (reverse (T.splitOn "_" (T.pack (toFilePath withoutExtension)))) of
@@ -36,13 +40,15 @@ smosArchiveExport ExportSettings {..} = do
               [x, _] -> x
               (x : y : _) -> y <> "_" <> x
 
-        if and
-          [ case tryToParseDay lastPieces of
-              Nothing -> True -- Can't parse the day, must include it.
-              Just d -> filterPeriodLocal now exportSetPeriod (LocalTime d midnight),
-            maybe (const True) filterPredicate exportSetFilter fp
-          ]
-          then do
+        when
+          ( and
+              [ case tryToParseDay lastPieces of
+                  Nothing -> True -- Can't parse the day, must include it.
+                  Just d -> filterIntervalDay interval d,
+                maybe (const True) filterPredicate exportSetFilter fp
+              ]
+          )
+          $ do
             let from = archiveDir </> fp
             let to = exportSetExportDir </> fp
             logInfoN "Exporting"
@@ -57,7 +63,6 @@ smosArchiveExport ExportSettings {..} = do
             when exportSetAlsoDeleteOriginals $ do
               logInfoN "and removing the original"
               liftIO $ removeFile from
-          else pure ()
 
   ensureDir exportSetExportDir
   runConduit $ streamSmosArchiveFiles dc .| C.mapM_ exportFile

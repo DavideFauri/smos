@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Smos.Report.Next where
@@ -17,16 +16,17 @@ import Data.Validity.Path ()
 import GHC.Generics
 import Path
 import Smos.Data
-import Smos.Report.Archive
-import Smos.Report.Config
+import Smos.Directory.Archive
+import Smos.Directory.OptParse
+import Smos.Directory.ShouldPrint
+import Smos.Directory.Streaming
 import Smos.Report.Filter
-import Smos.Report.ShouldPrint
-import Smos.Report.Streaming
 
-produceNextActionReport :: MonadIO m => Maybe EntryFilter -> HideArchive -> ShouldPrint -> DirectoryConfig -> m NextActionReport
-produceNextActionReport ef ha sp dc = produceReport ha sp dc (nextActionReportConduit ef)
+produceNextActionReport :: (MonadIO m) => Maybe EntryFilter -> HideArchive -> ShouldPrint -> DirectorySettings -> m NextActionReport
+produceNextActionReport ef ha sp dc =
+  produceReport ha sp dc (nextActionReportConduit ef)
 
-nextActionReportConduit :: Monad m => Maybe EntryFilter -> ConduitT (Path Rel File, SmosFile) void m NextActionReport
+nextActionReportConduit :: (Monad m) => Maybe EntryFilter -> ConduitT (Path Rel File, SmosFile) void m NextActionReport
 nextActionReportConduit ef =
   NextActionReport
     <$> ( nextActionConduitHelper ef
@@ -35,22 +35,21 @@ nextActionReportConduit ef =
             .| sinkList
         )
 
-nextActionConduitHelper :: Monad m => Maybe EntryFilter -> ConduitT (Path Rel File, SmosFile) (Path Rel File, ForestCursor Entry) m ()
+nextActionConduitHelper :: (Monad m) => Maybe EntryFilter -> ConduitT (Path Rel File, SmosFile) (Path Rel File, ForestCursor Entry) m ()
 nextActionConduitHelper ef =
   smosFileCursors
-    .| smosFilter (maybe isNextFilter (FilterAnd isNextFilter) ef)
+    .| C.filter (filterPredicate (maybe isNextFilter (FilterAnd isNextFilter) ef))
   where
     isNextFilter :: EntryFilter
-    isNextFilter = FilterSnd $ FilterWithinCursor $ FilterEntryTodoState $ FilterMaybe False $ FilterOr (FilterSub "NEXT") (FilterSub "STARTED")
-
-isNextAction :: Entry -> Bool
-isNextAction = maybe False isNextTodoState . entryState
+    isNextFilter =
+      FilterSnd $
+        FilterWithinCursor $
+          FilterEntryTodoState $
+            FilterMaybe False $
+              FilterOr (FilterSub "NEXT") (FilterSub "STARTED")
 
 isNextTodoState :: TodoState -> Bool
 isNextTodoState = (`elem` mapMaybe todoState ["NEXT", "STARTED"])
-
-makeNextActionReport :: [(Path Rel File, Entry)] -> NextActionReport
-makeNextActionReport = NextActionReport . map (uncurry makeNextActionEntry)
 
 makeNextActionEntry :: Path Rel File -> Entry -> NextActionEntry
 makeNextActionEntry rf e =
@@ -64,7 +63,6 @@ newtype NextActionReport = NextActionReport
   { nextActionReportEntries :: [NextActionEntry]
   }
   deriving stock (Show, Eq, Generic)
-  deriving newtype (Semigroup, Monoid)
   deriving (FromJSON, ToJSON) via (Autodocodec NextActionReport)
 
 instance Validity NextActionReport
@@ -90,6 +88,9 @@ instance HasCodec NextActionEntry where
   codec =
     object "NextActionEntry" $
       NextActionEntry
-        <$> requiredField "state" "The TODO state of the entry" .= nextActionEntryTodoState
-        <*> requiredField "header" "The header of the entry" .= nextActionEntryHeader
-        <*> requiredField "path" "The path of the file in which this entry was found" .= nextActionEntryFilePath
+        <$> requiredField "state" "The TODO state of the entry"
+          .= nextActionEntryTodoState
+        <*> requiredField "header" "The header of the entry"
+          .= nextActionEntryHeader
+        <*> requiredField "path" "The path of the file in which this entry was found"
+          .= nextActionEntryFilePath

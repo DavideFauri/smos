@@ -1,39 +1,50 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans -Wno-name-shadowing #-}
 
 module Smos.Server.DB
   ( module Smos.Server.DB,
+    module Smos.Server.DB.CASHash,
     module Smos.Server.DB.Compressed,
     module Database.Persist,
     module Database.Persist.Sql,
   )
 where
 
+import Control.Arrow (left)
+import Control.Monad
+import Control.Monad.IO.Class
+import Control.Monad.Logger
 import Data.ByteString (ByteString)
 import Data.Mergeful.Timed
+import Data.Proxy
 import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Time
-import Data.Validity
-import Data.Validity.Persist ()
+import Data.Time.Zones.All
 import Data.Word
 import Database.Persist
 import Database.Persist.Sql
 import Database.Persist.TH
-import GHC.Generics (Generic)
 import Path
 import Smos.API
+import Smos.Data
+import Smos.Server.DB.CASHash
 import Smos.Server.DB.Compressed
+import System.Exit
+import UnliftIO
 
 share
   [mkPersist sqlSettings, mkMigrate "serverAutoMigration"]
@@ -50,33 +61,30 @@ User
 
     deriving Show
     deriving Eq
-    deriving Generic
 
 
 StripeCustomer
-    user UserId
+    user UserId OnDeleteCascade
     customer Text -- Stripe customer id
 
     UniqueStripeCustomer user customer
 
     deriving Show
     deriving Eq
-    deriving Generic
 
 
 Subscription
-    user UserId
+    user UserId OnDeleteCascade
     end UTCTime
 
     UniqueSubscriptionUser user
 
     deriving Show
     deriving Eq
-    deriving Generic
 
 
 ServerFile
-    user UserId
+    user UserId OnDeleteCascade
     path (Path Rel File)
     contents ByteString
     time ServerTime
@@ -85,11 +93,10 @@ ServerFile
 
     deriving Show
     deriving Eq
-    deriving Generic
 
 
-Backup
-    user UserId
+Backup sql=backup_new
+    user UserId OnDeleteCascade
     uuid BackupUUID
     time UTCTime
     size Word64
@@ -98,17 +105,58 @@ Backup
 
     deriving Show
     deriving Eq
-    deriving Generic
 
 
-BackupFile
-    backup BackupId
+BackupFile sql=backup_file_new
+    backup BackupId OnDeleteCascade
     path (Path Rel File)
-    contents Compressed
+    file CasFileId -- No OnDeleteCascade to make sure we cannot delete files that are still in use
+
+    UniqueBackupFilePath backup path
 
     deriving Show
     deriving Eq
-    deriving Generic
+
+CasFile sql=cas_file
+    hash CASHash -- Hash of the uncompressed contents
+    contents Compressed
+
+    UniqueCasFileHash hash
+
+    deriving Show
+    deriving Eq
 |]
 
-instance Validity Backup
+instance PersistField TZLabel where
+  toPersistValue = toPersistValue . renderTZLabel
+  fromPersistValue pv = do
+    bs <- fromPersistValue pv
+    left T.pack $ parseTZLabel bs
+
+instance PersistFieldSql TZLabel where
+  sqlType Proxy = sqlType (Proxy :: Proxy Text)
+
+completeServerMigration :: (MonadUnliftIO m, MonadLogger m) => Bool -> SqlPersistT m ()
+completeServerMigration quiet = do
+  logInfoN "Running automatic migrations"
+  (if quiet then void . runMigrationQuiet else runMigration) serverAutoMigration
+    `catch` ( \case
+                PersistError t -> liftIO $ die $ T.unpack t
+                e -> throwIO e
+            )
+  logInfoN "Autmatic migrations done, starting application-specific migrations."
+  setUpIndices
+  logInfoN "Migrations done."
+
+-- Guidelines for indices:
+--
+--     * INDEX for foreign key
+setUpIndices :: (MonadIO m) => SqlPersistT m ()
+setUpIndices = do
+  rawExecute "CREATE INDEX IF NOT EXISTS server_file_path ON server_file (path)" []
+  rawExecute "CREATE INDEX IF NOT EXISTS server_file_user ON server_file (user)" []
+  rawExecute "CREATE INDEX IF NOT EXISTS backup_new_user ON backup_new (user)" []
+  rawExecute "CREATE INDEX IF NOT EXISTS backup_new_uuid ON backup_new (uuid)" []
+  rawExecute "CREATE INDEX IF NOT EXISTS backup_file_new_backup ON backup_file_new (backup)" []
+  rawExecute "CREATE INDEX IF NOT EXISTS backup_file_new_path ON backup_file_new (path)" []
+  rawExecute "CREATE INDEX IF NOT EXISTS backup_file_new_file ON backup_file_new (file)" []

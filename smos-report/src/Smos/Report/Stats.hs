@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -7,28 +6,25 @@ module Smos.Report.Stats where
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe
-import Data.Time
+import Data.Time.Zones
 import Data.Tree
-import GHC.Generics (Generic)
 import Path
 import Smos.Data
 import Smos.Report.Period
 
 data StatsReportContext = StatsReportContext
-  { statsReportContextNow :: ZonedTime,
-    statsReportContextPeriod :: Period,
-    statsReportContextWorkflowDir :: Path Abs Dir,
-    statsReportContextArchiveDir :: Path Abs Dir,
-    statsReportContextProjectsDir :: Path Abs Dir,
-    statsReportContextArchivedProjectsDir :: Path Abs Dir
+  { statsReportContextTimeZone :: !TZ,
+    statsReportContextInterval :: !Interval,
+    statsReportContextWorkflowDir :: !(Path Abs Dir),
+    statsReportContextArchiveDir :: !(Path Abs Dir),
+    statsReportContextProjectsDir :: !(Path Abs Dir),
+    statsReportContextArchivedProjectsDir :: !(Path Abs Dir)
   }
-  deriving (Show, Generic)
 
 data StatsReport = StatsReport
   { statsReportProjectStatsReport :: !ProjectStatsReport,
     statsReportStateStatsReport :: !StateStatsReport
   }
-  deriving (Show, Eq, Generic)
 
 instance Semigroup StatsReport where
   sr1 <> sr2 =
@@ -48,7 +44,7 @@ makeStatsReport src@StatsReportContext {..} rp sf =
   StatsReport
     { statsReportProjectStatsReport = makeProjectsStatsReport src rp sf,
       statsReportStateStatsReport =
-        makeStateStatsReport statsReportContextNow statsReportContextPeriod $
+        makeStateStatsReport statsReportContextTimeZone statsReportContextInterval $
           concatMap flatten $
             smosFileForest sf
     }
@@ -64,7 +60,7 @@ makeProjectsStatsReport StatsReportContext {..} rp sf =
       projectStatsReportTotalFiles = countIf active
     }
   where
-    active = smosFileActiveDuringPeriod statsReportContextNow statsReportContextPeriod sf
+    active = smosFileActiveDuringPeriod statsReportContextTimeZone statsReportContextInterval sf
     fullPath = (statsReportContextWorkflowDir </>)
     isArchived = isProperPrefixOf statsReportContextArchiveDir $ fullPath rp
     isArchivedProject = isProperPrefixOf statsReportContextArchivedProjectsDir $ fullPath rp
@@ -74,16 +70,16 @@ makeProjectsStatsReport StatsReportContext {..} rp sf =
         then 1
         else 0
 
-smosFileActiveDuringPeriod :: ZonedTime -> Period -> SmosFile -> Bool
-smosFileActiveDuringPeriod now p sf =
-  (p == AllTime)
-    || not (null $ stateHistoryEntriesInPeriod now p $ concatMap flatten $ smosFileForest sf)
+smosFileActiveDuringPeriod :: TZ -> Interval -> SmosFile -> Bool
+smosFileActiveDuringPeriod zone interval sf =
+  (interval == EverythingInterval)
+    || not (null $ stateHistoryEntriesInPeriod zone interval $ concatMap flatten $ smosFileForest sf)
 
-stateHistoryEntriesInPeriod :: ZonedTime -> Period -> [Entry] -> [StateHistoryEntry]
-stateHistoryEntriesInPeriod now p = concatMap go
+stateHistoryEntriesInPeriod :: TZ -> Interval -> [Entry] -> [StateHistoryEntry]
+stateHistoryEntriesInPeriod zone interval = concatMap go
   where
     go :: Entry -> [StateHistoryEntry]
-    go = mapMaybe (stateHistoryEntryInPeriod now p) . unStateHistory . entryStateHistory
+    go = mapMaybe (stateHistoryEntryInPeriod zone interval) . unStateHistory . entryStateHistory
 
 data ProjectStatsReport = ProjectStatsReport
   { projectStatsReportCurrentProjects :: Int,
@@ -93,7 +89,6 @@ data ProjectStatsReport = ProjectStatsReport
     projectStatsReportArchivedFiles :: Int,
     projectStatsReportTotalFiles :: Int
   }
-  deriving (Show, Eq, Generic)
 
 instance Semigroup ProjectStatsReport where
   psr1 <> psr2 =
@@ -131,7 +126,6 @@ data StateStatsReport = StateStatsReport
     stateStatsReportToStateTransitions :: !(Map (Maybe TodoState) Int),
     stateStatsReportStateTransitions :: !(Map (Maybe TodoState, Maybe TodoState) Int)
   }
-  deriving (Show, Eq, Generic)
 
 instance Semigroup StateStatsReport where
   sr1 <> sr2 =
@@ -152,7 +146,7 @@ instance Semigroup StateStatsReport where
           addMapOfInts (stateStatsReportStateTransitions sr1) (stateStatsReportStateTransitions sr2)
       }
 
-addMapOfInts :: Ord a => Map a Int -> Map a Int -> Map a Int
+addMapOfInts :: (Ord a) => Map a Int -> Map a Int -> Map a Int
 addMapOfInts = M.unionWith (+)
 
 instance Monoid StateStatsReport where
@@ -166,74 +160,74 @@ instance Monoid StateStatsReport where
       }
   mappend = (<>)
 
-makeStateStatsReport :: ZonedTime -> Period -> [Entry] -> StateStatsReport
-makeStateStatsReport now p es =
+makeStateStatsReport :: TZ -> Interval -> [Entry] -> StateStatsReport
+makeStateStatsReport zone interval es =
   StateStatsReport
-    { stateStatsReportStates = getCount $ mapMaybe (entryStateInPeriod now p) es,
-      stateStatsReportHistoricalStates = getCount $ historicalStatesInPeriod now p es,
-      stateStatsReportFromStateTransitions = getCount $ fromStateTransitionsInPeriod now p es,
-      stateStatsReportToStateTransitions = getCount $ toStateTransitionsInPeriod now p es,
-      stateStatsReportStateTransitions = getCount $ stateTransitionsInPeriod now p es
+    { stateStatsReportStates = getCount $ mapMaybe (entryStateInPeriod zone interval) es,
+      stateStatsReportHistoricalStates = getCount $ historicalStatesInPeriod zone interval es,
+      stateStatsReportFromStateTransitions = getCount $ fromStateTransitionsInPeriod zone interval es,
+      stateStatsReportToStateTransitions = getCount $ toStateTransitionsInPeriod zone interval es,
+      stateStatsReportStateTransitions = getCount $ stateTransitionsInPeriod zone interval es
     }
 
-withinPeriod :: ZonedTime -> Period -> StateHistoryEntry -> Bool
-withinPeriod now p = filterPeriod now p . stateHistoryEntryTimestamp
+withinPeriod :: TZ -> Interval -> StateHistoryEntry -> Bool
+withinPeriod zone interval = filterIntervalUTCTime zone interval . stateHistoryEntryTimestamp
 
-stateHistoryEntryInPeriod :: ZonedTime -> Period -> StateHistoryEntry -> Maybe StateHistoryEntry
-stateHistoryEntryInPeriod now p tse =
-  if withinPeriod now p tse
+stateHistoryEntryInPeriod :: TZ -> Interval -> StateHistoryEntry -> Maybe StateHistoryEntry
+stateHistoryEntryInPeriod zone interval tse =
+  if withinPeriod zone interval tse
     then Just tse
     else Nothing
 
-stateHistoryStateInPeriod :: ZonedTime -> Period -> StateHistoryEntry -> Maybe (Maybe TodoState)
-stateHistoryStateInPeriod now p tse =
-  stateHistoryEntryNewState <$> stateHistoryEntryInPeriod now p tse
+stateHistoryStateInPeriod :: TZ -> Interval -> StateHistoryEntry -> Maybe (Maybe TodoState)
+stateHistoryStateInPeriod zone interval tse =
+  stateHistoryEntryNewState <$> stateHistoryEntryInPeriod zone interval tse
 
-entryStateInPeriod :: ZonedTime -> Period -> Entry -> Maybe (Maybe TodoState)
-entryStateInPeriod now p e =
-  case (p, unStateHistory $ entryStateHistory e) of
-    (AllTime, []) -> Just Nothing
+entryStateInPeriod :: TZ -> Interval -> Entry -> Maybe (Maybe TodoState)
+entryStateInPeriod zone interval e =
+  case (interval, unStateHistory $ entryStateHistory e) of
+    (EverythingInterval, []) -> Just Nothing
     (_, []) -> Nothing
-    (_, tse : _) -> stateHistoryStateInPeriod now p tse
+    (_, tse : _) -> stateHistoryStateInPeriod zone interval tse
 
-historicalStatesInPeriod :: ZonedTime -> Period -> [Entry] -> [Maybe TodoState]
-historicalStatesInPeriod now p =
+historicalStatesInPeriod :: TZ -> Interval -> [Entry] -> [Maybe TodoState]
+historicalStatesInPeriod zone interval =
   concatMap
-    ( ( if p == AllTime
+    ( ( if interval == EverythingInterval
           then (Nothing :)
           else id
       )
-        . mapMaybe (stateHistoryStateInPeriod now p)
+        . mapMaybe (stateHistoryStateInPeriod zone interval)
         . unStateHistory
         . entryStateHistory
     )
 
-fromStateTransitionsInPeriod :: ZonedTime -> Period -> [Entry] -> [Maybe TodoState]
-fromStateTransitionsInPeriod now p = map fst . stateTransitionsInPeriod now p
+fromStateTransitionsInPeriod :: TZ -> Interval -> [Entry] -> [Maybe TodoState]
+fromStateTransitionsInPeriod zone interval = map fst . stateTransitionsInPeriod zone interval
 
-toStateTransitionsInPeriod :: ZonedTime -> Period -> [Entry] -> [Maybe TodoState]
-toStateTransitionsInPeriod now p = map snd . stateTransitionsInPeriod now p
+toStateTransitionsInPeriod :: TZ -> Interval -> [Entry] -> [Maybe TodoState]
+toStateTransitionsInPeriod zone interval = map snd . stateTransitionsInPeriod zone interval
 
-stateTransitionsInPeriod :: ZonedTime -> Period -> [Entry] -> [(Maybe TodoState, Maybe TodoState)]
-stateTransitionsInPeriod now p = concatMap go
+stateTransitionsInPeriod :: TZ -> Interval -> [Entry] -> [(Maybe TodoState, Maybe TodoState)]
+stateTransitionsInPeriod zone interval = concatMap go
   where
     go :: Entry -> [(Maybe TodoState, Maybe TodoState)]
     go = go' . unStateHistory . entryStateHistory
     go' :: [StateHistoryEntry] -> [(Maybe TodoState, Maybe TodoState)]
     go' [] = []
     go' [she] =
-      case stateHistoryStateInPeriod now p she of
+      case stateHistoryStateInPeriod zone interval she of
         Nothing -> []
         Just mts -> [(Nothing, mts)]
     go' (x : y : xs) =
-      case (,) <$> stateHistoryStateInPeriod now p x <*> stateHistoryStateInPeriod now p y of
+      case (,) <$> stateHistoryStateInPeriod zone interval x <*> stateHistoryStateInPeriod zone interval y of
         Just (tsx, tsy) -> (tsy, tsx) : go' (y : xs)
         _ -> go' (y : xs)
 
 getCount :: (Ord a, Foldable f) => f a -> Map a Int
 getCount = foldl (flip go) M.empty
   where
-    go :: Ord a => a -> Map a Int -> Map a Int
+    go :: (Ord a) => a -> Map a Int -> Map a Int
     go i =
       flip M.alter i $ \case
         Nothing -> Just 1

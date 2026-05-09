@@ -1,5 +1,5 @@
 name: smos-web-server
-version: 0.8.0
+version: 0.14.4
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
@@ -9,6 +9,8 @@ extra-source-files:
 - routes.txt
 - templates/**/*
 - assets/**/*
+- documentation.txt
+- options.nix
 
 dependencies:
 - base
@@ -19,43 +21,49 @@ library:
   build-tools: autoexporter
   dependencies:
   - aeson
-  - autodocodec
   - autodocodec-yaml
-  - base16-bytestring
   - bytestring
   - conduit
   - containers
   - data-default
   - deepseq
-  - envparse
-  - filepath
   - http-client
   - http-client-tls
   - http-types
+  - ical
   - monad-logger
   - mtl
-  - optparse-applicative
+  - opt-env-conf
   - path
   - path-io
   - persistent-sqlite
   - pretty-relative-time
   - pretty-show
+  - prometheus
+  - prometheus-ghc-stats
+  - prometheus-wai
   - servant
   - servant-auth-client
   - servant-client
   - shakespeare
   - smos
+  - smos-cli
   - smos-client
-  - smos-sync-client
-  - smos-web-style
-  - stm
+  - smos-data
+  - smos-directory
+  - smos-e2e
+  - smos-report
+  - smos-sync
+  - smos-web-assets
   - template-haskell
   - text
   - time
   - typed-uuid
+  - tz
   - unliftio
   - wai-extra
   - warp
+  - yaml
   - yesod
   - yesod-auth
   - yesod-autoreload
@@ -73,7 +81,9 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -Wall
+    - -with-rtsopts=-Iw60 # Only idle-gc once per minute
+    - -with-rtsopts=--nonmoving-gc # GC with more consistent latency
+    - -with-rtsopts=-T # Enable GHC Stats
     - -optP-Wno-nonportable-include-path # For macos
 
 
@@ -93,15 +103,22 @@ tests:
     - genvalidity-sydtest
     - http-client
     - http-types
+    - mergeful
     - monad-logger
+    - mtl
+    - opt-env-conf-test
+    - path-io
     - servant-client
+    - smos-api
     - smos-client
     - smos-data-gen
     - smos-server-gen
+    - smos-web-assets
     - smos-web-server
-    - smos-web-style
-    - stm
     - sydtest
     - sydtest-yesod
     - text
+    - time
+    - tz
+    - yaml
     - yesod-auth

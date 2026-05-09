@@ -13,50 +13,58 @@ extra-source-files:
 - content/pages/**/*
 - content/unreleased.markdown
 - templates/**/*
+- documentation.txt
+- options.nix
+
+dependencies:
+  - base
 
 library:
   source-dirs: src
   build-tools: autoexporter
   dependencies:
   - aeson
-  - aeson-pretty
   - autodocodec
   - autodocodec-yaml
-  - base >= 4.7
   - bytestring
   - cmark-gfm
   - containers
   - data-default
-  - envparse
+  - file-embed
   - filepath
   - fsnotify
-  - optparse-applicative
+  - monad-logger
+  - opt-env-conf
   - path
   - path-io
+  - prometheus
+  - prometheus-ghc-stats
+  - prometheus-wai
   - raw-strings-qq
+  - safe-coloured-text
   - semver
   - shakespeare
   - smos
   - smos-archive
   - smos-calendar-import
+  - smos-cli
   - smos-client
   - smos-data
   - smos-github
+  - smos-jobhunt
   - smos-notify
   - smos-query
   - smos-report
   - smos-scheduler
   - smos-server
   - smos-single
-  - smos-sync-client
+  - smos-sync
+  - smos-web-assets
   - smos-web-server
-  - smos-web-style
   - template-haskell
   - template-haskell-reload
   - text
-  - th-lift-instances
   - time
-  - typed-process
   - wai-extra
   - warp
   - yaml
@@ -74,6 +82,23 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -with-rtsopts=-Iw60 # Only idle-gc once per minute
+    - -with-rtsopts=--nonmoving-gc # GC with more consistent latency
+    - -with-rtsopts=-T # Enable GHC Stats
     dependencies:
-    - base >= 4.7 && < 5
     - smos-docs-site
+
+tests:
+  smos-docs-site-test:
+    main: Spec.hs
+    source-dirs: test/
+    build-tools: sydtest-discover
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -Wall
+    dependencies:
+    - opt-env-conf-test
+    - smos-docs-site
+    - sydtest

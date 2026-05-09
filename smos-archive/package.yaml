@@ -1,11 +1,13 @@
 name: smos-archive
-version: 0.3.2
+version: 0.7.1
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
 license: MIT
 
 extra-source-files:
+- documentation.txt
+- options.nix
 - test_resources/**/*
 
 dependencies:
@@ -14,26 +16,25 @@ dependencies:
 library:
   source-dirs: src/
   ghc-options: -Wall
+  build-tools: autoexporter
   dependencies:
-    - autodocodec
     - bytestring
     - conduit
     - containers
-    - envparse
     - exceptions
     - filepath
     - monad-logger
     - mtl
-    - optparse-applicative
+    - opt-env-conf
     - path
     - path-io
+    - smos-cli
     - smos-data
-    - smos-data
+    - smos-directory
     - smos-report
     - text
     - time
     - unliftio
-    - validity
 
 executables:
   smos-archive:
@@ -57,12 +58,14 @@ tests:
     - dirforest
     - genvalidity-sydtest
     - monad-logger
+    - opt-env-conf-test
     - path
     - path-io
     - smos-archive
     - smos-data
     - smos-data-gen
+    - smos-directory
+    - smos-directory-gen
     - smos-report
-    - smos-report-gen
     - sydtest
     - time

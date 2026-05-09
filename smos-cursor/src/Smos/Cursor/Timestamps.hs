@@ -33,12 +33,14 @@ import Cursor.Map
 import Cursor.Text
 import Cursor.Types
 import Data.Function
+import Data.Functor.Compose
 import Data.FuzzyTime
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe
 import Data.Time
+import Data.Time.Zones
 import Data.Validity
 import GHC.Generics (Generic)
 import Lens.Micro
@@ -83,7 +85,10 @@ rebuildTimestampsCursor (Just tsc) =
       rebuildMapCursor rebuildTimestampNameCursor rebuildTimestampCursor $
         timestampsCursorMapCursor tsc
 
-timestampsCursorCurrentTextCursorL :: Lens' TimestampsCursor TextCursor
+timestampsCursorCurrentTextCursorL ::
+  (Functor f) =>
+  (TextCursor -> f TextCursor) ->
+  (TimestampsCursor -> f TimestampsCursor)
 timestampsCursorCurrentTextCursorL =
   timestampsCursorMapCursorL
     . lens
@@ -95,11 +100,11 @@ timestampsCursorCurrentTextCursorL =
       ( \tsc tc ->
           tsc
             & mapCursorElemL
-            %~ ( \case
-                   KeyValueCursorKey _ v -> KeyValueCursorKey tc v
-                   KeyValueCursorValue k vc ->
-                     KeyValueCursorValue k $ vc {fuzzyLocalTimeCursorTextCursor = tc}
-               )
+              %~ ( \case
+                     KeyValueCursorKey _ v -> KeyValueCursorKey tc v
+                     KeyValueCursorValue k vc ->
+                       KeyValueCursorValue k $ vc {fuzzyLocalTimeCursorTextCursor = tc}
+                 )
       )
 
 timestampsCursorToggleSelected :: TimestampsCursor -> TimestampsCursor
@@ -125,14 +130,24 @@ timestampsCursorAppendChar c tsc =
 
 timestampsCursorRemoveChar :: TimestampsCursor -> Maybe (DeleteOrUpdate TimestampsCursor)
 timestampsCursorRemoveChar tsc = do
-  dou <- focusPossibleDeleteOrUpdate timestampsCursorCurrentTextCursorL textCursorRemove tsc
+  dou <-
+    getCompose
+      ( timestampsCursorCurrentTextCursorL
+          (Compose . textCursorRemove)
+          tsc
+      )
   pure $ case dou of
     Deleted -> tsc & timestampsCursorMapCursorL (mapCursorRemoveElem makeTimestampNameCursor)
     Updated tsc' -> Updated tsc'
 
 timestampsCursorDeleteChar :: TimestampsCursor -> Maybe (DeleteOrUpdate TimestampsCursor)
 timestampsCursorDeleteChar tsc = do
-  dou <- focusPossibleDeleteOrUpdate timestampsCursorCurrentTextCursorL textCursorDelete tsc
+  dou <-
+    getCompose
+      ( timestampsCursorCurrentTextCursorL
+          (Compose . textCursorDelete)
+          tsc
+      )
   pure $ case dou of
     Deleted -> tsc & timestampsCursorMapCursorL (mapCursorRemoveElem makeTimestampNameCursor)
     Updated tsc' -> Updated tsc'
@@ -180,8 +195,8 @@ timestampsCursorSelectOrAdd tsn lt =
         (\t _ -> t == tsn)
         (makeKeyValueCursorValue tsn (emptyFuzzyLocalTimeCursor (mkImpreciseLocalTime lt)))
 
-timestampsCursorUpdateTime :: ZonedTime -> TimestampsCursor -> TimestampsCursor
-timestampsCursorUpdateTime zt = (timestampsCursorMapCursorL . mapCursorElemL) %~ go
+timestampsCursorUpdateTime :: TZ -> UTCTime -> TimestampsCursor -> TimestampsCursor
+timestampsCursorUpdateTime zone now = (timestampsCursorMapCursorL . mapCursorElemL) %~ go
   where
     go ::
       KeyValueCursor TextCursor FuzzyLocalTimeCursor TimestampName Timestamp ->
@@ -190,11 +205,7 @@ timestampsCursorUpdateTime zt = (timestampsCursorMapCursorL . mapCursorElemL) %~
       case kvc of
         KeyValueCursorKey _ _ -> kvc
         KeyValueCursorValue k fztc ->
-          KeyValueCursorValue k $
-            fztc
-              { fuzzyLocalTimeCursorBaseLocalTime =
-                  mkImpreciseLocalTime $ utcToLocalTime (zonedTimeZone zt) (zonedTimeToUTC zt)
-              }
+          KeyValueCursorValue k $ fztc {fuzzyLocalTimeCursorBaseLocalTime = mkImpreciseLocalTime $ utcToLocalTimeTZ zone now}
 
 -- safe because of validity
 makeTimestampNameCursor :: TimestampName -> TextCursor
@@ -213,6 +224,6 @@ makeTimestampCursor ts =
 
 rebuildTimestampCursor :: FuzzyLocalTimeCursor -> Timestamp
 rebuildTimestampCursor fltc =
-  case rebuildFuzzyLocalTimeCursor fltc of
+  case rebuildFuzzyLocalTimeCursorForwards fltc of
     OnlyDaySpecified d -> TimestampDay d
     BothTimeAndDay lt -> TimestampLocalTime (mkImpreciseLocalTime lt)

@@ -99,6 +99,8 @@ module Smos.Data.Types
     validateImpreciseLocalTime,
     mkImpreciseTimeOfDay,
     validateImpreciseTimeOfDay,
+    parseTZLabel,
+    renderTZLabel,
   )
 where
 
@@ -115,8 +117,8 @@ import Data.Function
 import Data.Functor.Classes (Ord1 (..))
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
-import Data.Map (Map)
-import qualified Data.Map as M
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 import Data.Maybe
 import Data.Ord
 import Data.SemVer as Version
@@ -125,7 +127,10 @@ import qualified Data.Set as S
 import Data.String
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import Data.Time
+import Data.Time.Zones
+import Data.Time.Zones.All
 import Data.Tree
 import Data.Validity
 import Data.Validity.Containers ()
@@ -166,22 +171,26 @@ data Versioned a = Versioned
     versionedValue :: !a
   }
   deriving stock (Show, Eq, Generic)
-  deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec (Versioned a))
+  deriving (FromJSON, ToJSON) via (Autodocodec (Versioned a))
+  deriving (ToYaml) via (AutodocodecYaml (Versioned a))
 
-instance Validity a => Validity (Versioned a)
+instance (Validity a) => Validity (Versioned a)
 
-instance HasCodec a => HasCodec (Versioned a) where
+instance (HasCodec a) => HasCodec (Versioned a) where
   codec =
     object "Versioned" $
       Versioned
-        <$> requiredField "version" "version" .= versionedVersion
-        <*> requiredField "value" "versioned value" .= versionedValue
+        <$> requiredField "version" "version"
+          .= versionedVersion
+        <*> requiredField "value" "versioned value"
+          .= versionedValue
 
 newtype SmosFile = SmosFile
   { smosFileForest :: Forest Entry
   }
   deriving stock (Show, Eq, Generic)
-  deriving (ToJSON, FromJSON, ToYaml) via (Autodocodec SmosFile)
+  deriving (ToJSON, FromJSON) via (Autodocodec SmosFile)
+  deriving (ToYaml) via (AutodocodecYaml SmosFile)
 
 instance Ord SmosFile where
   compare = liftCompare (liftCompare compare) `on` smosFileForest
@@ -193,7 +202,7 @@ instance NFData SmosFile
 instance HasCodec SmosFile where
   codec = named "SmosFile" $ dimapCodec SmosFile smosFileForest $ entryForestCodec "Entry" codec
 
-entryTreeCodec :: Eq a => Text -> JSONCodec a -> JSONCodec (Tree a)
+entryTreeCodec :: (Eq a) => Text -> JSONCodec a -> JSONCodec (Tree a)
 entryTreeCodec n c =
   named ("Tree " <> n) $
     dimapCodec f g $
@@ -205,8 +214,10 @@ entryTreeCodec n c =
         -- look like an entry with all default values.
         ( object "Tree Entry" $
             Node
-              <$> requiredFieldWith "entry" c "root" .= rootLabel
-              <*> optionalFieldWithOmittedDefaultWith "forest" (entryForestCodec n c) [] "subforest" .= subForest
+              <$> requiredFieldWith "entry" c "root"
+                .= rootLabel
+              <*> optionalFieldWithOmittedDefaultWith "forest" (entryForestCodec n c) [] "subforest"
+                .= subForest
         )
         (c <?> "Leaf entry")
   where
@@ -217,20 +228,21 @@ entryTreeCodec n c =
       [] -> Right e
       _ -> Left tree
 
-entryForestCodec :: Eq a => Text -> JSONCodec a -> JSONCodec (Forest a)
+entryForestCodec :: (Eq a) => Text -> JSONCodec a -> JSONCodec (Forest a)
 entryForestCodec n c = named ("Forest " <> n) $ listCodec $ entryTreeCodec n c
 
 data Entry = Entry
-  { entryHeader :: Header,
-    entryContents :: Maybe Contents,
-    entryTimestamps :: Map TimestampName Timestamp, -- SCHEDULED, DEADLINE, etc.
-    entryProperties :: Map PropertyName PropertyValue,
-    entryStateHistory :: StateHistory, -- TODO, DONE, etc.
-    entryTags :: Set Tag, -- '@home', 'toast', etc.
-    entryLogbook :: Logbook
+  { entryHeader :: !Header,
+    entryContents :: !(Maybe Contents),
+    entryTimestamps :: !(Map TimestampName Timestamp), -- SCHEDULED, DEADLINE, etc.
+    entryProperties :: !(Map PropertyName PropertyValue),
+    entryStateHistory :: !StateHistory, -- TODO, DONE, etc.
+    entryTags :: !(Set Tag), -- '@home', 'toast', etc.
+    entryLogbook :: !Logbook
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving (ToJSON, FromJSON, ToYaml) via (Autodocodec Entry)
+  deriving (ToJSON, FromJSON) via (Autodocodec Entry)
+  deriving (ToYaml) via (AutodocodecYaml Entry)
 
 instance Validity Entry
 
@@ -260,8 +272,10 @@ instance HasCodec Entry where
           (\(msh1, msh2) -> fromMaybe emptyStateHistory $ msh1 <|> msh2)
           (\sh -> if nullStateHistory sh then (Nothing, Nothing) else (Just sh, Nothing))
           ( (,)
-              <$> oldStateHistoryField .= fst
-              <*> newStateHistoryField .= snd
+              <$> oldStateHistoryField
+                .= fst
+              <*> newStateHistoryField
+                .= snd
           )
           .= entryStateHistory
       newStateHistoryField = optionalField "history" "state history"
@@ -315,7 +329,8 @@ newtype Header = Header
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (IsString)
-  deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec Header)
+  deriving (FromJSON, ToJSON) via (Autodocodec Header)
+  deriving (ToYaml) via (AutodocodecYaml Header)
 
 instance Validity Header where
   validate (Header t) =
@@ -355,7 +370,8 @@ newtype Contents = Contents
   }
   deriving (Show, Eq, Ord, Generic)
   deriving newtype (IsString)
-  deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec Contents)
+  deriving (FromJSON, ToJSON) via (Autodocodec Contents)
+  deriving (ToYaml) via (AutodocodecYaml Contents)
 
 instance Validity Contents where
   validate (Contents t) =
@@ -395,7 +411,8 @@ newtype PropertyName = PropertyName
   }
   deriving (Show, Eq, Ord, Generic)
   deriving newtype (IsString, ToJSONKey)
-  deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec PropertyName)
+  deriving (FromJSON, ToJSON) via (Autodocodec PropertyName)
+  deriving (ToYaml) via (AutodocodecYaml PropertyName)
 
 instance Validity PropertyName where
   validate (PropertyName t) =
@@ -414,7 +431,7 @@ instance HasCodec PropertyName where
     named "PropertyName" $
       bimapCodec parsePropertyName propertyNameText codec
 
-parseJSONPropertyName :: MonadFail m => Text -> m PropertyName
+parseJSONPropertyName :: (MonadFail m) => Text -> m PropertyName
 parseJSONPropertyName t =
   case propertyName t of
     Nothing -> fail $ "Invalid property name: " <> T.unpack t
@@ -439,8 +456,9 @@ newtype PropertyValue = PropertyValue
   { propertyValueText :: Text
   }
   deriving (Show, Eq, Ord, Generic)
-  deriving newtype (IsString, ToJSONKey)
-  deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec PropertyValue)
+  deriving newtype (IsString, FromJSONKey, ToJSONKey)
+  deriving (FromJSON, ToJSON) via (Autodocodec PropertyValue)
+  deriving (ToYaml) via (AutodocodecYaml PropertyValue)
 
 instance Validity PropertyValue where
   validate (PropertyValue t) =
@@ -474,7 +492,8 @@ newtype TimestampName = TimestampName
   }
   deriving (Show, Eq, Ord, Generic)
   deriving newtype (IsString, ToJSONKey)
-  deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec TimestampName)
+  deriving (FromJSON, ToJSON) via (Autodocodec TimestampName)
+  deriving (ToYaml) via (AutodocodecYaml TimestampName)
 
 instance Validity TimestampName where
   validate (TimestampName t) =
@@ -492,8 +511,17 @@ instance HasCodec TimestampName where
   codec =
     named "TimestampName" $
       bimapCodec parseTimestampName timestampNameText codec
+        <??> [ "Name of a Timestamp",
+               "You can any timestamp name you like, but by convention they are all upper-case.",
+               "Some standard timestamp names provide semantics for timestamps:",
+               "AFTER: This entry will only become relevant after the given timestamp.",
+               "BEGIN: This entry describes an event that begins on the given timestamp (inclusive).",
+               "END: This entry describes an event that ends on the given timestamp (exclusive).",
+               "DEADLINE: This entry describes a task that needs to be done before the given timestamp (exclusive).",
+               "SCHEDULED: This entry describes an occurrence that happens at a given timestamp."
+             ]
 
-parseJSONTimestampName :: MonadFail m => Text -> m TimestampName
+parseJSONTimestampName :: (MonadFail m) => Text -> m TimestampName
 parseJSONTimestampName t =
   case timestampName t of
     Nothing -> fail $ "Invalid timestamp name: " <> T.unpack t
@@ -515,10 +543,11 @@ validateTimestampNameChar :: Char -> Validation
 validateTimestampNameChar = validateHeaderChar
 
 data Timestamp
-  = TimestampDay Day
-  | TimestampLocalTime LocalTime
+  = TimestampDay !Day
+  | TimestampLocalTime !LocalTime
   deriving (Show, Eq, Ord, Generic)
-  deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec Timestamp)
+  deriving (FromJSON, ToJSON) via (Autodocodec Timestamp)
+  deriving (ToYaml) via (AutodocodecYaml Timestamp)
 
 instance Validity Timestamp where
   validate ts =
@@ -534,7 +563,8 @@ instance NFData Timestamp
 instance HasCodec Timestamp where
   codec =
     named "Timestamp" $
-      dimapCodec f g $ eitherCodec dayCodec localTimeCodec
+      dimapCodec f g $
+        eitherCodec dayCodec localTimeCodec
     where
       f = \case
         Left d -> TimestampDay d
@@ -564,7 +594,7 @@ timestampPrettyText = T.pack . timestampPrettyString
 parseTimestampString :: String -> Either String Timestamp
 parseTimestampString s =
   (TimestampDay <$> parseDayString s)
-    <|> (TimestampLocalTime <$> parseLocalTimeString s)
+    `altEither` (TimestampLocalTime <$> parseLocalTimeString s)
 
 parseTimestampText :: Text -> Either String Timestamp
 parseTimestampText = parseTimestampString . T.unpack
@@ -586,7 +616,8 @@ newtype TodoState = TodoState
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (IsString)
-  deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec TodoState)
+  deriving (FromJSON, ToJSON) via (Autodocodec TodoState)
+  deriving (ToYaml) via (AutodocodecYaml TodoState)
 
 instance Validity TodoState where
   validate (TodoState t) =
@@ -618,7 +649,8 @@ newtype StateHistory = StateHistory
   { unStateHistory :: [StateHistoryEntry]
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec StateHistory)
+  deriving (FromJSON, ToJSON) via (Autodocodec StateHistory)
+  deriving (ToYaml) via (AutodocodecYaml StateHistory)
 
 instance Validity StateHistory where
   validate st@(StateHistory hs) =
@@ -648,11 +680,12 @@ nullStateHistory :: StateHistory -> Bool
 nullStateHistory = (== emptyStateHistory)
 
 data StateHistoryEntry = StateHistoryEntry
-  { stateHistoryEntryNewState :: Maybe TodoState,
-    stateHistoryEntryTimestamp :: UTCTime
+  { stateHistoryEntryNewState :: !(Maybe TodoState),
+    stateHistoryEntryTimestamp :: !UTCTime
   }
   deriving stock (Show, Eq, Generic)
-  deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec StateHistoryEntry)
+  deriving (FromJSON, ToJSON) via (Autodocodec StateHistoryEntry)
+  deriving (ToYaml) via (AutodocodecYaml StateHistoryEntry)
 
 instance Validity StateHistoryEntry where
   validate she@StateHistoryEntry {..} =
@@ -676,13 +709,17 @@ instance HasCodec StateHistoryEntry where
       parseAlternative
         ( object "StateHistoryEntry" $
             StateHistoryEntry
-              <$> requiredField "state" "new state" .= stateHistoryEntryNewState
-              <*> requiredFieldWith "time" utctimeCodec "time at which the state change happened" .= stateHistoryEntryTimestamp
+              <$> requiredField "state" "new state"
+                .= stateHistoryEntryNewState
+              <*> requiredFieldWith "time" utctimeCodec "time at which the state change happened"
+                .= stateHistoryEntryTimestamp
         )
         ( object "StateHistoryEntry (legacy)" $
             StateHistoryEntry
-              <$> requiredField "new-state" "new state" .= stateHistoryEntryNewState
-              <*> requiredFieldWith "timestamp" utctimeCodec "time at which the state change happened" .= stateHistoryEntryTimestamp
+              <$> requiredField "new-state" "new state"
+                .= stateHistoryEntryNewState
+              <*> requiredFieldWith "timestamp" utctimeCodec "time at which the state change happened"
+                .= stateHistoryEntryTimestamp
         )
 
 newtype Tag = Tag
@@ -690,7 +727,8 @@ newtype Tag = Tag
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (IsString)
-  deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec Tag)
+  deriving (FromJSON, ToJSON) via (Autodocodec Tag)
+  deriving (ToYaml) via (AutodocodecYaml Tag)
 
 instance Validity Tag where
   validate (Tag t) =
@@ -727,10 +765,11 @@ validateTagChar c =
     ]
 
 data Logbook
-  = LogOpen UTCTime [LogbookEntry]
-  | LogClosed [LogbookEntry]
+  = LogOpen !UTCTime ![LogbookEntry]
+  | LogClosed ![LogbookEntry]
   deriving stock (Show, Eq, Ord, Generic)
-  deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec Logbook)
+  deriving (FromJSON, ToJSON) via (Autodocodec Logbook)
+  deriving (ToYaml) via (AutodocodecYaml Logbook)
 
 instance Validity Logbook where
   validate lb =
@@ -819,11 +858,12 @@ logbookClosed =
     _ -> False
 
 data LogbookEntry = LogbookEntry
-  { logbookEntryStart :: UTCTime,
-    logbookEntryEnd :: UTCTime
+  { logbookEntryStart :: !UTCTime,
+    logbookEntryEnd :: !UTCTime
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving (FromJSON, ToJSON, ToYaml) via (Autodocodec LogbookEntry)
+  deriving (FromJSON, ToJSON) via (Autodocodec LogbookEntry)
+  deriving (ToYaml) via (AutodocodecYaml LogbookEntry)
 
 instance Validity LogbookEntry where
   validate lbe@LogbookEntry {..} =
@@ -842,8 +882,10 @@ instance HasCodec LogbookEntry where
       bimapCodec prettyValidate id $
         object "LogbookEntry" $
           LogbookEntry
-            <$> requiredFieldWith "start" utctimeCodec "start of the logbook entry" .= logbookEntryStart
-            <*> requiredFieldWith "end" utctimeCodec "end of the logbook entry" .= logbookEntryEnd
+            <$> requiredFieldWith "start" utctimeCodec "start of the logbook entry"
+              .= logbookEntryStart
+            <*> requiredFieldWith "end" utctimeCodec "end of the logbook entry"
+              .= logbookEntryEnd
 
 logbookEntryDiffTime :: LogbookEntry -> NominalDiffTime
 logbookEntryDiffTime LogbookEntry {..} = diffUTCTime logbookEntryEnd logbookEntryStart
@@ -880,7 +922,7 @@ parseUTCTimeString s = fmap mkImpreciseUTCTime $
   case parseTimeEither defaultTimeLocale utctimeFormat s of
     Right u -> Right u
     Left err ->
-      case parseTimeEither defaultTimeLocale "%FT%T%QZ" s <|> parseTimeEither defaultTimeLocale "%F %T%Q%z" s of
+      case parseTimeEither defaultTimeLocale "%FT%T%QZ" s `altEither` parseTimeEither defaultTimeLocale "%F %T%Q%z" s of
         Right u -> Right u
         Left _ -> Left err
 
@@ -907,7 +949,7 @@ parseLocalTimeString s = fmap mkImpreciseLocalTime $
 renderLocalTimeString :: LocalTime -> String
 renderLocalTimeString = formatTime defaultTimeLocale localTimeFormat
 
-parseTimeEither :: ParseTime a => TimeLocale -> String -> String -> Either String a
+parseTimeEither :: (ParseTime a) => TimeLocale -> String -> String -> Either String a
 parseTimeEither locale format string = case parseTimeM True locale format string of
   Nothing -> Left $ "Failed to parse time value: " <> string <> " via " <> format
   Just r -> Right r
@@ -940,3 +982,28 @@ validateImpreciseTimeOfDay tod =
   declare "The number of seconds is integer" $
     let sec = todSec tod
      in ceiling sec == (floor sec :: Int)
+
+instance Validity TZ where
+  validate = trivialValidation
+
+instance Validity TZLabel
+
+instance HasCodec TZLabel where
+  codec =
+    named "TZLabel" $
+      bimapCodec parseTZLabel renderTZLabel codec
+        <??> docs
+    where
+      docs = "All possible timezone labels:" : map renderTZLabel [minBound :: TZLabel .. maxBound]
+
+parseTZLabel :: Text -> Either String TZLabel
+parseTZLabel t = case fromTZName (TE.encodeUtf8 t) of
+  Nothing -> Left $ "Unknown TZ Label: " <> show t
+  Just l -> Right l
+
+renderTZLabel :: TZLabel -> Text
+renderTZLabel = TE.decodeLatin1 . toTZName
+
+altEither :: Either a b -> Either a b -> Either a b
+altEither (Right b) _ = Right b
+altEither (Left _) e = e

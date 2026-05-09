@@ -1,391 +1,373 @@
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -fno-warn-unused-pattern-binds #-}
 
-module Smos.Report.OptParse
-  ( module Smos.Report.OptParse,
-    module Smos.Report.OptParse.Types,
-  )
-where
+module Smos.Report.OptParse where
 
 import Autodocodec
-import Autodocodec.Yaml
 import Control.Applicative
 import Control.Arrow
-import Control.Monad
-import Data.Aeson (FromJSON)
-import Data.Aeson as JSON (eitherDecodeFileStrict)
-import Data.Foldable
-import Data.List.NonEmpty (NonEmpty)
+import Data.Aeson (FromJSONKey, ToJSONKey)
+import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
-import Data.Maybe
+import Data.Map (Map)
+import qualified Data.Map as M
+import Data.Set (Set)
+import qualified Data.Set as S
+import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Time hiding (parseTime)
-import Data.Yaml as Yaml (decodeFileEither, prettyPrintParseException)
-import qualified Env
-import Options.Applicative
+import Data.Time
+import Data.Validity
+import GHC.Generics (Generic)
+import OptEnvConf
 import Path
-import Path.IO
-import Smos.Report.Agenda.Types
-import Smos.Report.Archive
-import Smos.Report.Config
+import Smos.Data
+import Smos.Directory.OptParse
 import Smos.Report.Filter
-import Smos.Report.OptParse.Types
-import Smos.Report.Period
 import Smos.Report.Projection
 import Smos.Report.Sorter
 import Smos.Report.Time
-import Smos.Report.TimeBlock
 
-combineToConfig ::
-  SmosReportConfig -> Flags -> Environment -> Maybe Configuration -> IO SmosReportConfig
-combineToConfig src Flags {..} Environment {..} mc = do
-  smosReportConfigDirectoryConfig <- combineToDirectoryConfig (smosReportConfigDirectoryConfig src) flagDirectoryFlags envDirectoryEnvironment (confDirectoryConf <$> mc)
-  smosReportConfigWaitingConfig <- combineToWaitingReportConfig (smosReportConfigWaitingConfig src) (mc >>= confWaitingReportConf)
-  smosReportConfigStuckConfig <- combineToStuckReportConfig (smosReportConfigStuckConfig src) (mc >>= confStuckReportConf)
-  smosReportConfigWorkConfig <- combineToWorkReportConfig (smosReportConfigWorkConfig src) (mc >>= confWorkReportConf)
-  pure $ SmosReportConfig {..}
+parseFilterOptions :: Parser EntryFilter
+parseFilterOptions =
+  let h = help "A filter to filter entries by"
+   in foldFilterAnd
+        <$> choice
+          [ someNonEmpty
+              ( setting
+                  [ h,
+                    option,
+                    reader $ eitherReader (left (T.unpack . prettyFilterParseError) . parseEntryFilter . T.pack),
+                    short 'f',
+                    long "filter",
+                    metavar "FILTER"
+                  ]
+              ),
+            setting
+              [ h,
+                reader $ commaSeparated $ eitherReader (left (T.unpack . prettyFilterParseError) . parseEntryFilter . T.pack),
+                env "FILTER",
+                metavar "FILTER"
+              ],
+            setting
+              [ h,
+                confWith "filter" (singleOrNonEmptyCodec codec)
+              ]
+          ]
 
-combineToDirectoryConfig :: DirectoryConfig -> DirectoryFlags -> DirectoryEnvironment -> Maybe DirectoryConfiguration -> IO DirectoryConfig
-combineToDirectoryConfig dc DirectoryFlags {..} DirectoryEnvironment {..} mc = do
-  wfs <-
-    case msum [dirFlagWorkflowDir, dirEnvWorkflowDir, mc >>= (fmap T.unpack . directoryConfWorkflowDir)] of
-      Nothing -> pure $ directoryConfigWorkflowFileSpec dc
-      Just wd -> do
-        ad <- resolveDir' wd
-        pure $ AbsoluteWorkflow ad
-  afs <-
-    case msum [dirFlagArchiveDir, dirEnvArchiveDir, mc >>= (fmap T.unpack . directoryConfArchiveDir)] of
-      Nothing -> pure $ directoryConfigArchiveFileSpec dc
-      Just wd -> do
-        ad <- resolveDir' wd
-        pure $ ArchiveAbsolute ad
-  pfs <-
-    case msum [dirFlagProjectsDir, dirEnvProjectsDir, mc >>= (fmap T.unpack . directoryConfProjectsDir)] of
-      Nothing -> pure $ directoryConfigProjectsFileSpec dc
-      Just wd -> do
-        ad <- resolveDir' wd
-        pure $ ProjectsAbsolute ad
-  apfs <-
-    case msum
-      [ dirFlagArchivedProjectsDir,
-        dirEnvArchivedProjectsDir,
-        mc >>= (fmap T.unpack . directoryConfArchivedProjectsDir)
-      ] of
-      Nothing -> pure $ directoryConfigArchivedProjectsFileSpec dc
-      Just wd -> do
-        ad <- resolveDir' wd
-        pure $ ArchivedProjectsAbsolute ad
-  pure $
-    dc
-      { directoryConfigWorkflowFileSpec = wfs,
-        directoryConfigArchiveFileSpec = afs,
-        directoryConfigProjectsFileSpec = pfs,
-        directoryConfigArchivedProjectsFileSpec = apfs
-      }
-
-combineToWaitingReportConfig :: WaitingReportConfig -> Maybe WaitingReportConfiguration -> IO WaitingReportConfig
-combineToWaitingReportConfig wrc mc = do
-  let WaitingReportConfig _ = undefined
-  pure $
-    wrc
-      { waitingReportConfigThreshold = fromMaybe defaultWaitingThreshold $ mc >>= waitingReportConfThreshold
-      }
-
-combineToStuckReportConfig :: StuckReportConfig -> Maybe StuckReportConfiguration -> IO StuckReportConfig
-combineToStuckReportConfig wrc mc = do
-  let StuckReportConfig _ = undefined
-  pure $
-    wrc
-      { stuckReportConfigThreshold = fromMaybe defaultStuckThreshold $ mc >>= stuckReportConfThreshold
-      }
-
-combineToWorkReportConfig :: WorkReportConfig -> Maybe WorkReportConfiguration -> IO WorkReportConfig
-combineToWorkReportConfig wrc mc = do
-  let WorkReportConfig _ _ _ _ _ _ = undefined
-  pure $
-    wrc
-      { workReportConfigBaseFilter =
-          (mc >>= workReportConfBaseFilter) <|> workReportConfigBaseFilter wrc,
-        workReportConfigChecks = fromMaybe (workReportConfigChecks wrc) (mc >>= workReportConfChecks),
-        workReportConfigContexts = fromMaybe (workReportConfigContexts wrc) (mc >>= workReportConfContexts),
-        workReportConfigTimeProperty = mc >>= workReportConfTimeFilterProperty,
-        workReportConfigProjection = fromMaybe defaultProjection (mc >>= workReportConfProjection),
-        workReportConfigSorter = mc >>= workReportConfSorter
-      }
-
-parseFlags :: Parser Flags
-parseFlags =
-  Flags <$> parseDirectoryFlags
-
-parseFlagsWithConfigFile :: Parser a -> Parser (FlagsWithConfigFile a)
-parseFlagsWithConfigFile p =
-  FlagsWithConfigFile <$> parseConfigFileFlag <*> p
-
-parseConfigFileFlag :: Parser (Maybe FilePath)
-parseConfigFileFlag =
-  optional
-    ( strOption
-        ( mconcat
-            [ metavar "FILEPATH",
-              help "The config file to use",
-              long "config-file",
-              completer $ bashCompleter "file"
-            ]
-        )
-    )
-
-parseDirectoryFlags :: Parser DirectoryFlags
-parseDirectoryFlags =
-  DirectoryFlags <$> parseWorkflowDirFlag <*> parseArchiveDirFlag
-    <*> parseProjectsDirFlag
-    <*> parseArchivedProjectsDirFlag
-
-parseWorkflowDirFlag :: Parser (Maybe FilePath)
-parseWorkflowDirFlag =
-  optional
-    ( strOption
-        ( mconcat
-            [ metavar "FILEPATH",
-              help "The workflow directory to use",
-              long "workflow-dir",
-              completer $ bashCompleter "directory"
-            ]
-        )
-    )
-
-parseArchiveDirFlag :: Parser (Maybe FilePath)
-parseArchiveDirFlag =
-  optional
-    ( strOption
-        ( mconcat
-            [ metavar "FILEPATH",
-              help "The archive directory to use",
-              long "archive-dir",
-              completer $ bashCompleter "directory"
-            ]
-        )
-    )
-
-parseProjectsDirFlag :: Parser (Maybe FilePath)
-parseProjectsDirFlag =
-  optional
-    ( strOption
-        ( mconcat
-            [ metavar "FILEPATH",
-              help "The projects directory to use",
-              long "projects-dir",
-              completer $ bashCompleter "directory"
-            ]
-        )
-    )
-
-parseHistoricityFlag :: Parser (Maybe AgendaHistoricity)
-parseHistoricityFlag =
-  optional (flag' HistoricalAgenda (long "historical") <|> flag' FutureAgenda (long "future"))
-
-parseHideArchiveFlag :: Parser (Maybe HideArchive)
-parseHideArchiveFlag =
-  optional
-    ( flag' HideArchive (mconcat [long "hide-archived", help "ignore archived files."])
-        <|> flag'
-          Don'tHideArchive
-          (mconcat [short 'a', long "show-archived", help "Don't ignore archived files."])
-    )
-
-parseContextNameArg :: Parser (Maybe ContextName)
-parseContextNameArg =
-  optional $ argument (ContextName <$> str) (mconcat [metavar "CONTEXT", help "The context that you are in"])
-
-parseTimeFilterArg :: Parser (Maybe Time)
-parseTimeFilterArg =
-  optional $
-    argument
-      (eitherReader (parseTime . T.pack))
-      (mconcat [metavar "TIME_FILTER", help "A filter to filter by time"])
-
-parseFilterOptionsRel :: Parser (Maybe EntryFilter)
-parseFilterOptionsRel =
-  fmap foldFilterAnd . NE.nonEmpty
-    <$> many
-      ( option
-          (eitherReader (left (T.unpack . prettyFilterParseError) . parseEntryFilter . T.pack))
-          (mconcat [short 'f', long "filter", metavar "FILTER", help "A filter to filter entries by"])
+parseFilterArgs :: Parser EntryFilter
+parseFilterArgs =
+  foldFilterAnd
+    <$> someNonEmpty
+      ( setting
+          [ help "A filter to filter entries by",
+            argument,
+            reader $ eitherReader (left (T.unpack . prettyFilterParseError) . parseEntryFilter . T.pack),
+            metavar "FILTER"
+          ]
       )
 
-parseFilterArgsRel :: Parser (Maybe EntryFilter)
-parseFilterArgsRel =
-  fmap foldFilterAnd . NE.nonEmpty
+parseFileFilterArgs :: Parser (Maybe (Filter (Path Rel File)))
+parseFileFilterArgs =
+  fmap foldFilterOr . NE.nonEmpty
     <$> many
-      ( argument
-          (eitherReader (left (T.unpack . prettyFilterParseError) . parseEntryFilter . T.pack))
-          (mconcat [metavar "FILTER", help "A filter to filter entries by"])
+      ( setting
+          [ help "A filter to smos files by",
+            argument,
+            reader $ eitherReader $ left (T.unpack . prettyFilterParseError) . parseProjectFilter . T.pack,
+            metavar "FILTER"
+          ]
       )
-
-parseArchivedProjectsDirFlag :: Parser (Maybe FilePath)
-parseArchivedProjectsDirFlag =
-  optional
-    ( strOption
-        ( mconcat
-            [ metavar "FILEPATH",
-              help "The archived projects directory to use",
-              long "archived-projects-dir",
-              completer $ bashCompleter "directory"
-            ]
-        )
-    )
 
 parseProjectFilterArgs :: Parser (Maybe ProjectFilter)
 parseProjectFilterArgs =
   fmap foldFilterAnd . NE.nonEmpty
     <$> many
-      ( argument
-          (eitherReader (left (T.unpack . prettyFilterParseError) . parseProjectFilter . T.pack))
-          (mconcat [metavar "FILTER", help "A filter to filter projects by"])
-      )
-
-parseFileFilterArgs :: Parser (Maybe (Filter (Path Rel File)))
-parseFileFilterArgs =
-  fmap foldFilterAnd . NE.nonEmpty
-    <$> many
-      ( argument
-          (eitherReader (left (T.unpack . prettyFilterParseError) . parseProjectFilter . T.pack))
-          (mconcat [metavar "FILTER", help "A filter to smos files by"])
-      )
-
-parseProjectionArgs :: Parser (Maybe (NonEmpty Projection))
-parseProjectionArgs =
-  NE.nonEmpty . catMaybes
-    <$> many
-      ( option
-          (Just <$> eitherReader (parseProjection . T.pack))
-          ( mconcat
-              [ long "add-column",
-                long "project",
-                metavar "PROJECTION",
-                help "A projection to project entries onto fields"
-              ]
-          )
-      )
-
-parseSorterArgs :: Parser (Maybe Sorter)
-parseSorterArgs =
-  fmap (foldl1 AndThen) . NE.nonEmpty . catMaybes
-    <$> many
-      ( option
-          (Just <$> eitherReader (parseSorter . T.pack))
-          (mconcat [long "sort", metavar "SORTER", help "A sorter to sort entries by"])
-      )
-
-parseTimeBlock :: Parser (Maybe TimeBlock)
-parseTimeBlock =
-  optional
-    ( asum
-        [ flag' DayBlock $ mconcat [long "day-block", help "blocks of one day"],
-          flag' WeekBlock $ mconcat [long "week-block", help "blocks of one week"],
-          flag' MonthBlock $ mconcat [long "month-block", help "blocks of one month"],
-          flag' YearBlock $ mconcat [long "year-block", help "blocks of one year"],
-          flag' OneBlock $ mconcat [long "one-block", help "a single block"]
-        ]
-    )
-
-parsePeriod :: Parser (Maybe Period)
-parsePeriod =
-  parseBeginEnd
-    <|> optional
-      ( asum
-          [ flag' Yesterday (mconcat [long "yesterday", help "yesterday"]),
-            flag' Today (mconcat [long "today", help "today"]),
-            flag' Tomorrow (mconcat [long "tomorrow", help "tomorrow"]),
-            flag' LastWeek (mconcat [long "last-week", help "last week"]),
-            flag' ThisWeek (mconcat [long "this-week", help "this week"]),
-            flag' NextWeek (mconcat [long "next-week", help "next week"]),
-            flag' LastMonth (mconcat [long "last-month", help "last month"]),
-            flag' ThisMonth (mconcat [long "this-month", help "this month"]),
-            flag' NextMonth (mconcat [long "next-month", help "next month"]),
-            flag' LastYear (mconcat [long "last-year", help "last year"]),
-            flag' ThisYear (mconcat [long "this-year", help "this year"]),
-            flag' NextYear (mconcat [long "next-year", help "next year"]),
-            flag' AllTime (mconcat [long "all-time", help "all time"])
+      ( setting
+          [ argument,
+            reader $ eitherReader (left (T.unpack . prettyFilterParseError) . parseProjectFilter . T.pack),
+            metavar "FILTER",
+            help "A filter to filter projects by"
           ]
       )
-  where
-    parseBeginEnd :: Parser (Maybe Period)
-    parseBeginEnd =
-      ( \mb me ->
-          case (mb, me) of
-            (Nothing, Nothing) -> Nothing
-            (Just begin, Nothing) -> Just (BeginOnly begin)
-            (Nothing, Just end) -> Just (EndOnly end)
-            (Just begin, Just end) -> Just (BeginEnd begin end)
-      )
-        <$> optional
-          ( option
-              (maybeReader parseLocalBegin)
-              (mconcat [long "begin", metavar "LOCALTIME", help "start time (inclusive)"])
-          )
-        <*> optional
-          ( option
-              (maybeReader parseLocalEnd)
-              (mconcat [long "end", metavar "LOCALTIME", help "end time (inclusive)"])
-          )
-    parseLocalBegin :: String -> Maybe LocalTime
-    parseLocalBegin s = LocalTime <$> parseLocalDay s <*> pure midnight <|> parseExactly s
-    parseLocalEnd :: String -> Maybe LocalTime
-    parseLocalEnd s =
-      (LocalTime <$> (addDays 1 <$> parseLocalDay s) <*> pure midnight) <|> parseExactly s
-    parseExactly :: String -> Maybe LocalTime
-    parseExactly s =
-      parseTimeM True defaultTimeLocale "%F %R" s <|> parseTimeM True defaultTimeLocale "%F %T" s
-    parseLocalDay :: String -> Maybe Day
-    parseLocalDay = parseTimeM True defaultTimeLocale "%F"
 
-getEnvironment :: IO Environment
-getEnvironment = Env.parse (Env.header "Environment") prefixedEnvironmentParser
+parseSorterOptions :: Parser Sorter
+parseSorterOptions =
+  let h = help "A sorter to sort entries by"
+   in foldl1 AndThen
+        <$> choice
+          [ someNonEmpty
+              ( setting
+                  [ h,
+                    option,
+                    reader $ eitherReader $ parseSorter . T.pack,
+                    long "sort",
+                    metavar "SORTER"
+                  ]
+              ),
+            setting
+              [ h,
+                reader $ commaSeparated $ eitherReader $ parseSorter . T.pack,
+                env "SORTER",
+                metavar "SORTER"
+              ],
+            setting
+              [ h,
+                confWith "sorter" (singleOrNonEmptyCodec codec)
+              ]
+          ]
 
-prefixedEnvironmentParser :: Env.Parser Env.Error Environment
-prefixedEnvironmentParser = Env.prefixed "SMOS_" environmentParser
+newtype ContextName = ContextName
+  { contextNameText :: Text
+  }
+  deriving (Show, Eq, Ord, Generic, FromJSONKey, ToJSONKey)
 
-environmentParser :: Env.Parser Env.Error Environment
-environmentParser = Environment <$> directoryEnvironmentParser
+instance Validity ContextName
 
-directoryEnvironmentParser :: Env.Parser Env.Error DirectoryEnvironment
-directoryEnvironmentParser =
-  DirectoryEnvironment
-    <$> optional (Env.var Env.str "WORKFLOW_DIR" (Env.help "Workflow directory"))
-    <*> optional (Env.var Env.str "ARCHIVE_DIR" (Env.help "Archive directory"))
-    <*> optional (Env.var Env.str "PROJECTS_DIR" (Env.help "Projects directory"))
-    <*> optional (Env.var Env.str "ARCHIVED_PROJECTS_DIR" (Env.help "Archived projects directory"))
+instance HasCodec ContextName where
+  codec = dimapCodec ContextName contextNameText codec
 
-envWithConfigFileParser :: Env.Parser Env.Error a -> Env.Parser Env.Error (EnvWithConfigFile a)
-envWithConfigFileParser p =
-  EnvWithConfigFile
-    <$> optional (Env.var Env.str "CONFIG_FILE" (Env.help "Workflow directory"))
-    <*> p
+instance HasParser ContextName where
+  settingsParser =
+    setting
+      [ help "The context that you are in",
+        argument,
+        reader $ ContextName <$> str,
+        env "CONTEXT",
+        conf "context",
+        metavar "CONTEXT"
+      ]
 
-defaultConfigFiles :: IO [Path Abs File]
-defaultConfigFiles = do
-  home <- getHomeDir
-  homeConfigDir <- resolveDir home ".smos"
-  xdgConfigDir <- getXdgDir XdgConfig (Just [reldir|smos|])
-  let inDirs = do
-        d <- [xdgConfigDir, homeConfigDir]
-        pure $ d </> [relfile|config|]
-  plainFile <- resolveFile home ".smos"
-  let files = inDirs ++ [plainFile]
-  pure $ mapMaybe (replaceExtension ".yaml") files
+data ReportSettings = ReportSettings
+  { reportSettingDirectorySettings :: !DirectorySettings,
+    reportSettingWaitingSettings :: !WaitingReportSettings,
+    reportSettingStuckSettings :: !StuckReportSettings,
+    reportSettingWorkSettings :: !WorkReportSettings,
+    reportSettingFreeSettings :: !FreeReportSettings
+  }
 
-parseYamlConfig :: FromJSON a => Path Abs File -> IO (Either String a)
-parseYamlConfig configFile =
-  fmap (left prettyPrintParseException) $ decodeFileEither $ fromAbsFile configFile
+instance HasParser ReportSettings where
+  settingsParser = parseReportSettings
 
-parseJSONConfig :: FromJSON a => Path Abs File -> IO (Either String a)
-parseJSONConfig configFile = JSON.eitherDecodeFileStrict $ fromAbsFile configFile
+{-# ANN parseReportSettings ("NOCOVER" :: String) #-}
+parseReportSettings :: Parser ReportSettings
+parseReportSettings = do
+  reportSettingDirectorySettings <- settingsParser
+  reportSettingWaitingSettings <- subSettings "waiting"
+  reportSettingStuckSettings <- subSettings "stuck"
+  reportSettingWorkSettings <- subSettings "work"
+  reportSettingFreeSettings <- subSettings "free"
+  pure ReportSettings {..}
 
-getConfiguration :: HasCodec a => FlagsWithConfigFile b -> EnvWithConfigFile c -> IO (Maybe a)
-getConfiguration FlagsWithConfigFile {..} EnvWithConfigFile {..} = do
-  case flagWithConfigFile <|> envWithConfigFile of
-    Just sf -> resolveFile' sf >>= readYamlConfigFile
-    Nothing -> defaultConfigFiles >>= readFirstYamlConfigFile
+defaultReportSettings :: ReportSettings
+defaultReportSettings =
+  ReportSettings
+    { reportSettingDirectorySettings = defaultDirectorySettings,
+      reportSettingWaitingSettings = defaultWaitingReportSettings,
+      reportSettingStuckSettings = defaultStuckReportSettings,
+      reportSettingWorkSettings = defaultWorkReportSettings,
+      reportSettingFreeSettings = defaultFreeReportSettings
+    }
+
+data WaitingReportSettings = WaitingReportSettings
+  { waitingReportSettingThreshold :: Time
+  }
+
+instance HasParser WaitingReportSettings where
+  settingsParser = parseWaitingReportSettings
+
+{-# ANN parseWaitingReportSettings ("NOCOVER" :: String) #-}
+parseWaitingReportSettings :: Parser WaitingReportSettings
+parseWaitingReportSettings = do
+  waitingReportSettingThreshold <-
+    setting
+      [ help "waiting report threshold to consider waiting entries 'overdue'",
+        reader $ eitherReader $ parseTime . T.pack,
+        name "threshold",
+        metavar "TIME",
+        value defaultWaitingThreshold
+      ]
+  pure WaitingReportSettings {..}
+
+defaultWaitingReportSettings :: WaitingReportSettings
+defaultWaitingReportSettings =
+  WaitingReportSettings
+    { waitingReportSettingThreshold = defaultWaitingThreshold
+    }
+
+defaultWaitingThreshold :: Time
+defaultWaitingThreshold = Days 7
+
+data StuckReportSettings = StuckReportSettings
+  { stuckReportSettingThreshold :: Time
+  }
+
+instance HasParser StuckReportSettings where
+  settingsParser = parseStuckReportSettings
+
+{-# ANN parseStuckReportSettings ("NOCOVER" :: String) #-}
+parseStuckReportSettings :: Parser StuckReportSettings
+parseStuckReportSettings = do
+  stuckReportSettingThreshold <-
+    setting
+      [ help "stuck report threshold to consider stuck projects 'overdue'",
+        reader $ eitherReader $ parseTime . T.pack,
+        name "threshold",
+        metavar "TIME",
+        value defaultStuckThreshold
+      ]
+  pure StuckReportSettings {..}
+
+defaultStuckReportSettings :: StuckReportSettings
+defaultStuckReportSettings =
+  StuckReportSettings
+    { stuckReportSettingThreshold = defaultStuckThreshold
+    }
+
+defaultStuckThreshold :: Time
+defaultStuckThreshold = Weeks 3
+
+data WorkReportSettings = WorkReportSettings
+  { workReportSettingBaseFilter :: Maybe EntryFilter,
+    workReportSettingChecks :: Set EntryFilter,
+    workReportSettingContexts :: Map ContextName EntryFilter,
+    workReportSettingTimeProperty :: Maybe PropertyName,
+    workReportSettingProjection :: NonEmpty Projection,
+    workReportSettingSorter :: Maybe Sorter
+  }
+
+instance HasParser WorkReportSettings where
+  settingsParser = parseWorkReportSettings
+
+{-# ANN parseWorkReportSettings ("NOCOVER" :: String) #-}
+parseWorkReportSettings :: Parser WorkReportSettings
+parseWorkReportSettings = do
+  workReportSettingBaseFilter <- parseWorkBaseFilter
+  workReportSettingChecks <- parseWorkChecks
+  workReportSettingContexts <- parseWorkContexts
+  workReportSettingTimeProperty <- parseWorkTimeProperty
+  workReportSettingProjection <- parseProjectionOptions
+  workReportSettingSorter <-
+    optional $
+      setting
+        [ help "The sorter to use to sort the rows",
+          reader $ eitherReader $ parseSorter . T.pack,
+          name "sorter",
+          metavar "SORTER"
+        ]
+  pure WorkReportSettings {..}
+
+defaultWorkReportSettings :: WorkReportSettings
+defaultWorkReportSettings =
+  WorkReportSettings
+    { workReportSettingBaseFilter = Just defaultWorkBaseFilter,
+      workReportSettingChecks = S.empty,
+      workReportSettingContexts = M.empty,
+      workReportSettingTimeProperty = Nothing,
+      workReportSettingProjection = defaultProjection,
+      workReportSettingSorter = Nothing
+    }
+
+parseWorkBaseFilter :: Parser (Maybe EntryFilter)
+parseWorkBaseFilter =
+  optional $
+    setting
+      [ help "The base work filter",
+        reader $ eitherReader $ left (T.unpack . prettyFilterParseError) . parseEntryFilter . T.pack,
+        name "base-filter",
+        metavar "FILTER",
+        value defaultWorkBaseFilter
+      ]
+
+parseWorkContexts :: Parser (Map ContextName EntryFilter)
+parseWorkContexts =
+  setting
+    [ help "Contexts for the work report",
+      conf "contexts",
+      value M.empty
+    ]
+
+parseWorkChecks :: Parser (Set EntryFilter)
+parseWorkChecks =
+  setting
+    [ help "Checks for the work report",
+      conf "checks",
+      value S.empty
+    ]
+
+defaultWorkBaseFilter :: EntryFilter
+defaultWorkBaseFilter =
+  FilterSnd $
+    FilterWithinCursor $
+      FilterEntryTodoState $
+        FilterMaybe False $
+          FilterOr (FilterSub "NEXT") (FilterSub "STARTED")
+
+parseProjectionOptions :: Parser (NonEmpty Projection)
+parseProjectionOptions =
+  setting
+    [ help "The columns in the report",
+      reader $ commaSeparated $ eitherReader $ parseProjection . T.pack,
+      name "columns",
+      metavar "COLUMNS",
+      value defaultProjection
+    ]
+
+defaultProjection :: NonEmpty Projection
+defaultProjection = OntoFile :| [OntoState, OntoHeader]
+
+parseWorkTimeProperty :: Parser (Maybe PropertyName)
+parseWorkTimeProperty =
+  optional $
+    setting
+      [ help "The property to use to filter by time",
+        reader $ eitherReader $ parsePropertyName . T.pack,
+        name "time-filter",
+        metavar "PROPERTY_NAME"
+      ]
+
+data FreeReportSettings = FreeReportSettings
+  { freeReportSettingEarliestTimeOfDay :: !(Maybe TimeOfDay),
+    freeReportSettingLatestTimeOfDay :: !(Maybe TimeOfDay)
+  }
+
+instance HasParser FreeReportSettings where
+  settingsParser = parseFreeReportSettings
+
+{-# ANN parseFreeReportSettings ("NOCOVER" :: String) #-}
+parseFreeReportSettings :: Parser FreeReportSettings
+parseFreeReportSettings = do
+  freeReportSettingEarliestTimeOfDay <-
+    optional $
+      setting
+        [ help "the earliest time of day to consider free",
+          reader $ maybeReader $ parseTimeM True defaultTimeLocale "%H:%M",
+          name "earliest",
+          metavar "TIME_OF_DAY"
+        ]
+  freeReportSettingLatestTimeOfDay <-
+    optional $
+      setting
+        [ help "the latest time of day to consider free",
+          reader $ maybeReader $ parseTimeM True defaultTimeLocale "%H:%M",
+          name "latest",
+          metavar "TIME_OF_DAY"
+        ]
+  pure FreeReportSettings {..}
+
+defaultFreeReportSettings :: FreeReportSettings
+defaultFreeReportSettings =
+  FreeReportSettings
+    { freeReportSettingEarliestTimeOfDay = Just defaultEarliestFreeTimeOfDay,
+      freeReportSettingLatestTimeOfDay = Just defaultLatestFreeTimeOfDay
+    }
+
+defaultEarliestFreeTimeOfDay :: TimeOfDay
+defaultEarliestFreeTimeOfDay = TimeOfDay 08 00 00
+
+defaultLatestFreeTimeOfDay :: TimeOfDay
+defaultLatestFreeTimeOfDay = TimeOfDay 22 00 00

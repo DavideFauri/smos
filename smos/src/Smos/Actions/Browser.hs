@@ -9,7 +9,9 @@ import Path
 import Smos.Actions.File
 import Smos.Actions.Utils
 import Smos.Cursor.FileBrowser
-import Smos.Report.Config
+import Smos.Directory.OptParse
+import Smos.Directory.Resolution
+import Smos.Report.OptParse
 import Smos.Types
 
 allPlainBrowserActions :: [Action]
@@ -254,47 +256,48 @@ browserEnter =
     }
 
 selectBrowserWorkflow :: Action
-selectBrowserWorkflow = selectBrowserHelper "Workflow" resolveReportWorkflowDir
+selectBrowserWorkflow = selectBrowserHelper "Workflow" resolveDirWorkflowDir
 
 selectBrowserProjects :: Action
-selectBrowserProjects = selectBrowserHelper "Projects" resolveReportProjectsDir
+selectBrowserProjects = selectBrowserHelper "Projects" resolveDirProjectsDir
 
 selectBrowserArchive :: Action
-selectBrowserArchive = selectBrowserHelper "Archive" resolveReportArchiveDir
+selectBrowserArchive = selectBrowserHelper "Archive" resolveDirArchiveDir
 
 selectBrowserReview :: Action
-selectBrowserReview = selectBrowserHelper "Review" (fmap (</> [reldir|review|]) . resolveReportWorkflowDir)
+selectBrowserReview = selectBrowserHelper "Review" (fmap (</> [reldir|review|]) . resolveDirWorkflowDir)
 
 selectBrowserClient :: Action
-selectBrowserClient = selectBrowserHelper "Client" (fmap (</> [reldir|client|]) . resolveReportProjectsDir)
+selectBrowserClient = selectBrowserHelper "Client" (fmap (</> [reldir|client|]) . resolveDirProjectsDir)
 
 selectBrowserSide :: Action
-selectBrowserSide = selectBrowserHelper "Side" (fmap (</> [reldir|side|]) . resolveReportProjectsDir)
+selectBrowserSide = selectBrowserHelper "Side" (fmap (</> [reldir|side|]) . resolveDirProjectsDir)
 
-selectBrowserHelper :: Text -> (SmosReportConfig -> IO (Path Abs Dir)) -> Action
+selectBrowserHelper :: Text -> (DirectorySettings -> IO (Path Abs Dir)) -> Action
 selectBrowserHelper dirName dirFunc =
   Action
     { actionName = ActionName $ "selectBrowser" <> dirName,
       actionFunc = modifyEditorCursorS $ \ec -> do
         saveCurrentSmosFile
         closeCurrentFile
-        src <- asks configReportConfig
-        wd <- liftIO $ dirFunc src
-        dfc' <- startFileBrowserCursor wd
+        ds <- asks (reportSettingDirectorySettings . configReportSettings)
+        dir <- liftIO $ dirFunc ds
+        newBrowserCursor <- startFileBrowserCursor dir
         -- We don't want to move the cursor if the directory hasn't changed.
         -- We could get rid of this extra checking if the filebrowser had a way of re-syncing while it was going.
         -- but even then we shouldn't because the syncing might not have happned soon enough.
-        let dfc = case editorCursorBrowserCursor ec of
-              Just dfc'' ->
-                if rebuildFileBrowserCursor dfc'' == rebuildFileBrowserCursor dfc'
-                  then dfc''
-                  else dfc'
-              Nothing -> dfc'
+        let browserCursor = case editorCursorBrowserCursor ec of
+              Just oldBrowserCursor ->
+                if fileBrowserCursorBase oldBrowserCursor == fileBrowserCursorBase newBrowserCursor
+                  && rebuildFileBrowserCursor oldBrowserCursor == rebuildFileBrowserCursor newBrowserCursor
+                  then oldBrowserCursor -- With the old selection
+                  else newBrowserCursor
+              Nothing -> newBrowserCursor
         pure $
           ec
             { editorCursorSelection = BrowserSelected,
               editorCursorFileCursor = Nothing,
-              editorCursorBrowserCursor = Just dfc
+              editorCursorBrowserCursor = Just browserCursor
             },
       actionDescription = "Save the current file and switch to the file browser in the " <> dirName <> " directory."
     }
@@ -312,9 +315,9 @@ browserArchive =
   Action
     { actionName = "browserArchive",
       actionFunc = modifyFileBrowserCursorS $ \fbc -> do
-        src <- asks configReportConfig
-        ad <- liftIO $ resolveReportArchiveDir src
-        wd <- liftIO $ resolveReportWorkflowDir src
+        ds <- asks (reportSettingDirectorySettings . configReportSettings)
+        ad <- liftIO $ resolveDirArchiveDir ds
+        wd <- liftIO $ resolveDirWorkflowDir ds
         fileBrowserArchiveFile wd ad fbc,
       actionDescription = "Move the current file to the Archive."
     }

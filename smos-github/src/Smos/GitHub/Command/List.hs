@@ -1,12 +1,8 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Smos.GitHub.Command.List
-  ( githubList,
-  )
-where
+module Smos.GitHub.Command.List (githubList) where
 
 import Conduit
 import Control.Concurrent.Async
@@ -19,28 +15,28 @@ import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Time
-import GHC.Generics (Generic)
 import GitHub (IssueNumber (..), github, unIssueNumber)
 import qualified GitHub
 import GitHub.Auth (Auth (OAuth))
 import GitHub.Data.Name
 import Path
+import Smos.CLI.Colour
+import Smos.CLI.Formatting
 import Smos.Data
+import Smos.Directory.Archive
+import Smos.Directory.Resolution
+import Smos.Directory.ShouldPrint
+import Smos.Directory.Streaming
 import Smos.GitHub.Issue
 import Smos.GitHub.OptParse
-import Smos.Query.Formatting
-import Smos.Query.OptParse.Types (ColourSettings (..))
-import Smos.Report.Archive
-import Smos.Report.Config
-import Smos.Report.ShouldPrint
-import Smos.Report.Streaming
 import System.IO
+import Text.Colour
 import Text.Colour.Term
 
 githubList :: Settings -> IO ()
 githubList Settings {..} = do
   wd <- resolveDirWorkflowDir setDirectorySettings
-  case setGithubOauthToken of
+  case setGitHubOauthToken of
     Nothing -> putStrLn "WARNING: No OAUTH token configured. Some functionality may not work without it."
     Just _ -> pure ()
   trips <-
@@ -51,9 +47,9 @@ githubList Settings {..} = do
         .| smosFileEntries
         .| C.concatMap (\(rf, e) -> (,,) rf e <$> parseEntryGitHubUrl e) -- C.concatMap generalises mapMaybe
         .| sinkList
-  let mAuth = OAuth . TE.encodeUtf8 <$> setGithubOauthToken
+  let mAuth = OAuth . TE.encodeUtf8 <$> setGitHubOauthToken
   report <- completeListReport mAuth trips
-  putChunksLocale $ renderGitHubListReport setColourConfig report
+  putChunksLocale $ renderGitHubListReport setColourSettings report
 
 parseEntryGitHubUrl :: Entry -> Maybe GitHubUrl
 parseEntryGitHubUrl e = do
@@ -62,7 +58,6 @@ parseEntryGitHubUrl e = do
   parseGitHubUrl (T.unpack (propertyValueText up))
 
 newtype GitHubListReport = GitHubListReport {githubListReportRows :: [ListReportRow]}
-  deriving (Show, Eq, Generic)
 
 completeListReport :: Maybe GitHub.Auth -> [(Path Rel File, Entry, GitHubUrl)] -> IO GitHubListReport
 completeListReport mAuth = fmap (GitHubListReport . sortOn listReportRowBall) . mapConcurrently (fillInRow mAuth)
@@ -84,16 +79,15 @@ data ListReportRow = ListReportRow
     listReportRowMerged :: !(Maybe UTCTime),
     listReportRowBall :: !(Maybe Ball)
   }
-  deriving (Show, Eq, Generic)
 
 -- Note: The order of the constructors matters for the ordering of the list
 data Ball = BallInOurCourt | BallInTheirCourt
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Eq, Ord)
 
 fillInRow :: Maybe GitHub.Auth -> (Path Rel File, Entry, GitHubUrl) -> IO ListReportRow
 fillInRow mAuth (listReportRowPath, listReportRowEntry, listReportRowGitHubUrl) = do
-  let mGithub :: FromJSON result => GitHub.Request rw result -> IO (Maybe result)
-      mGithub req = case mAuth of
+  let mGitHub :: (FromJSON result) => GitHub.Request rw result -> IO (Maybe result)
+      mGitHub req = case mAuth of
         Nothing -> pure Nothing
         Just auth -> do
           errOrRes <- github auth req
@@ -102,14 +96,14 @@ fillInRow mAuth (listReportRowPath, listReportRowEntry, listReportRowGitHubUrl) 
             Right r -> Just r
   (listReportRowState, listReportRowMerged, mRemoteLastUpdate) <- case listReportRowGitHubUrl of
     PullRequestUrl o r i -> do
-      pr <- mGithub $ GitHub.pullRequestR o r i
+      pr <- mGitHub $ GitHub.pullRequestR o r i
       pure
         ( GitHub.pullRequestState <$> pr,
           pr >>= GitHub.pullRequestMergedAt,
           GitHub.pullRequestUpdatedAt <$> pr
         )
     IssueUrl o r i -> do
-      iss <- mGithub $ GitHub.issueR o r i
+      iss <- mGitHub $ GitHub.issueR o r i
       pure
         ( GitHub.issueState <$> iss,
           Nothing,

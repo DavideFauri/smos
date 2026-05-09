@@ -1,10 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Smos.Query.Commands.Work
-  ( smosQueryWork,
-  )
-where
+module Smos.Query.Commands.Work (smosQueryWork) where
 
 import Conduit
 import qualified Data.Map as M
@@ -15,18 +12,20 @@ import Smos.Report.Work
 
 smosQueryWork :: WorkSettings -> Q ()
 smosQueryWork WorkSettings {..} = do
-  now <- liftIO getZonedTime
+  zone <- liftIO loadLocalTZ
+  now <- liftIO getCurrentTime
   mcf <- forM workSetContext $ \cn ->
     case M.lookup cn workSetContexts of
       Nothing -> dieQ $ unwords ["Context not found:", T.unpack $ contextNameText cn]
       Just cf -> pure cf
-  dc <- asks envDirectoryConfig
+  dc <- asks envDirectorySettings
   wd <- liftIO $ resolveDirWorkflowDir dc
   pd <- liftIO $ resolveDirProjectsDir dc
   let mpd = stripProperPrefix wd pd
   let wrc =
         WorkReportContext
-          { workReportContextNow = now,
+          { workReportContextTimeZone = zone,
+            workReportContextNow = now,
             workReportContextProjectsSubdir = mpd,
             workReportContextBaseFilter = workSetBaseFilter,
             workReportContextCurrentContext = mcf,
@@ -45,6 +44,7 @@ smosQueryWork WorkSettings {..} = do
   outputChunks $
     renderWorkReport
       cc
+      zone
       now
       workSetContexts
       workSetWaitingThreshold
@@ -52,8 +52,8 @@ smosQueryWork WorkSettings {..} = do
       workSetProjection
       wr
 
-renderWorkReport :: ColourSettings -> ZonedTime -> Map ContextName EntryFilter -> Time -> Time -> NonEmpty Projection -> WorkReport -> [Chunk]
-renderWorkReport cc now ctxs waitingThreshold stuckThreshold ne WorkReport {..} =
+renderWorkReport :: ColourSettings -> TZ -> UTCTime -> Map ContextName EntryFilter -> Time -> Time -> NonEmpty Projection -> WorkReport -> [Chunk]
+renderWorkReport cc zone now ctxs waitingThreshold stuckThreshold ne WorkReport {..} =
   mconcat $
     concat $
       intercalate [spacer] $
@@ -62,7 +62,7 @@ renderWorkReport cc now ctxs waitingThreshold stuckThreshold ne WorkReport {..} 
           [ unlessNull
               workReportNextBegin
               [ sectionHeading "Next meeting",
-                [formatAsBicolourTable cc $ maybe [] ((: []) . formatAgendaEntry now) workReportNextBegin]
+                [formatAsBicolourTable cc $ maybe [] ((: []) . formatAgendaEntry zone now) workReportNextBegin]
               ],
             unlessNull
               ctxs
@@ -79,8 +79,13 @@ renderWorkReport cc now ctxs waitingThreshold stuckThreshold ne WorkReport {..} 
                     unlessNull violations [warningHeading ("Check violation for " <> renderFilter f), [entryTable violations]]
               ),
             unlessNull
+              workReportOngoingEntries
+              [ sectionHeading "Ongoing",
+                [ongoingTable]
+              ],
+            unlessNull
               workReportAgendaEntries
-              [ sectionHeading "Deadlines",
+              [ sectionHeading "Upcoming",
                 [agendaTable]
               ],
             unlessNull
@@ -114,7 +119,8 @@ renderWorkReport cc now ctxs waitingThreshold stuckThreshold ne WorkReport {..} 
     heading c = [formatAsBicolourTable cc [[c]]]
     spacer = [formatAsBicolourTable cc [[chunk " "]]]
     entryTable = renderEntryReport cc . makeEntryReport ne
-    agendaTable = formatAsBicolourTable cc $ map (formatAgendaEntry now) workReportAgendaEntries
-    waitingTable = formatAsBicolourTable cc $ map (formatWaitingEntry waitingThreshold (zonedTimeToUTC now)) workReportOverdueWaiting
-    stuckTable = formatAsBicolourTable cc $ map (formatStuckReportEntry stuckThreshold (zonedTimeToUTC now)) workReportOverdueStuck
+    agendaTable = formatAsBicolourTable cc $ map (formatAgendaEntry zone now) workReportAgendaEntries
+    ongoingTable = formatAsBicolourTable cc $ map (formatOngoingEntry zone now) workReportOngoingEntries
+    waitingTable = formatAsBicolourTable cc $ map (formatWaitingEntry waitingThreshold now) workReportOverdueWaiting
+    stuckTable = formatAsBicolourTable cc $ map (formatStuckReportEntry stuckThreshold now) workReportOverdueStuck
     limboTable = formatAsBicolourTable cc $ map ((: []) . pathChunk) workReportLimboProjects

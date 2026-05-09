@@ -9,16 +9,19 @@ module Smos.Activation
 where
 
 import Cursor.DirForest
+import Data.Foldable
+import Data.List
+import Data.Maybe
 import Data.Ord as Ord
+import Data.Sequence (Seq, (|>))
 import qualified Data.Sequence as Seq
 import qualified Graphics.Vty as Vty
-import Import
 import Lens.Micro
 import Smos.Cursor.Entry
 import Smos.Cursor.FileBrowser
 import Smos.Cursor.Report.Entry
 import Smos.Cursor.Report.Next
--- import Smos.Cursor.Report.Stuck
+import Smos.Cursor.Report.Ongoing
 import Smos.Cursor.Report.Timestamps
 import Smos.Cursor.Report.Waiting
 import Smos.Cursor.Report.Work
@@ -85,6 +88,15 @@ currentKeyMappings KeyMap {..} EditorCursor {..} =
                             case entryReportCursorSelection waitingReportCursorEntryReportCursor of
                               EntryReportSelected -> waitingReportMatchers
                               EntryReportFilterSelected -> waitingReportSearchMatchers
+                  ReportOngoing OngoingReportCursor {..} ->
+                    let OngoingReportKeyMap {..} = reportsKeymapOngoingReportKeyMap
+                        OngoingReportKeyMap _ _ _ = reportsKeymapOngoingReportKeyMap
+                        ongoingReportAnys = map ((,) AnyMatcher) ongoingReportAnyMatchers
+                     in (++ ongoingReportAnys) $
+                          map ((,) SpecificMatcher) $
+                            case entryReportCursorSelection ongoingReportCursorEntryReportCursor of
+                              EntryReportSelected -> ongoingReportMatchers
+                              EntryReportFilterSelected -> ongoingReportSearchMatchers
                   ReportTimestamps TimestampsReportCursor {..} ->
                     let TimestampsReportKeyMap {..} = reportsKeymapTimestampsReportKeyMap
                         TimestampsReportKeyMap _ _ _ = reportsKeymapTimestampsReportKeyMap

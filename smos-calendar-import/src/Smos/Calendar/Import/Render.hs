@@ -18,14 +18,17 @@ renderAllEvents = makeSmosFile . map renderEvents . S.toAscList
 
 renderEvents :: Events -> Tree Entry
 renderEvents Events {..} =
-  Node
-    ( (newEntry h)
-        { entryContents = fromMaybe "invalid original event" . contents <$> staticOriginalEvent,
+  case eventsList of
+    [] -> Node titleEntry []
+    [e] -> Node (setProperties eventsStatic (setTimestamps e (setContents mc titleEntry))) []
+    es -> Node titleEntry $ map (toNode . setProperties eventsStatic . renderEventEntry h mc) es
+  where
+    eventsList = S.toAscList events
+    titleEntry =
+      (newEntry h)
+        { entryContents = fromMaybe "Invalid original event" . contents <$> staticOriginalEvent,
           entryProperties = maybe M.empty (M.singleton "UID") $ staticUID >>= propertyValue
         }
-    )
-    $ map (toNode . renderEvent h mc) (S.toAscList events)
-  where
     Static {..} = eventsStatic
     h = fromMaybe "Event without Summary" $ staticSummary >>= header
     mc = case staticDescription of
@@ -35,10 +38,16 @@ renderEvents Events {..} =
     toNode :: a -> Tree a
     toNode a = Node a []
 
-renderEvent :: Header -> Maybe Contents -> Event -> Entry
-renderEvent h mc ev =
+renderEventEntry :: Header -> Maybe Contents -> Event -> Entry
+renderEventEntry h mc ev = setContents mc (setTimestamps ev (newEntry h))
+
+setContents :: Maybe Contents -> Entry -> Entry
+setContents mc e = e {entryContents = mc}
+
+setTimestamps :: Event -> Entry -> Entry
+setTimestamps ev e =
   let ts = renderTimestamps ev
-   in (newEntry h) {entryTimestamps = ts, entryContents = mc}
+   in e {entryTimestamps = ts}
 
 renderTimestamps :: Event -> Map TimestampName Timestamp
 renderTimestamps Event {..} =
@@ -47,3 +56,13 @@ renderTimestamps Event {..} =
       [ [("BEGIN", ts) | Just ts <- [eventStart]],
         [("END", ts) | Just ts <- [eventEnd]]
       ]
+
+setProperties :: Static -> Entry -> Entry
+setProperties ev e =
+  let ps = renderProperties ev
+   in e {entryProperties = ps}
+
+renderProperties :: Static -> Map PropertyName PropertyValue
+renderProperties Static {..} =
+  let busyPropertyValue = if staticBusy then "true" else "false"
+   in M.fromList $ catMaybes [(,) "busy" <$> propertyValue busyPropertyValue]

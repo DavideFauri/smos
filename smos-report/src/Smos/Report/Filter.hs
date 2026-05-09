@@ -14,6 +14,7 @@
 module Smos.Report.Filter where
 
 import Autodocodec
+import Conduit
 import Control.Arrow
 import Control.DeepSeq
 import Control.Monad
@@ -21,6 +22,7 @@ import Cursor.Simple.Forest
 import Cursor.Simple.Tree
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import Data.Char as Char
+import qualified Data.Conduit.Combinators as C
 import Data.Function
 import Data.List
 import Data.List.NonEmpty (NonEmpty (..))
@@ -48,10 +50,16 @@ import Text.ParserCombinators.Parsec.Char
 import Text.Read (readMaybe)
 import Text.Show.Pretty (ppShow)
 
+mFilterConduit :: (Monad m) => Maybe (Filter a) -> ConduitT a a m ()
+mFilterConduit = maybe (C.map id) filterConduit
+
+filterConduit :: (Monad m) => Filter a -> ConduitT a a m ()
+filterConduit = C.filter . filterPredicate
+
 data Paren
   = OpenParen
   | ClosedParen
-  deriving (Show, Eq, Read, Generic)
+  deriving (Show, Eq, Generic)
 
 instance Validity Paren
 
@@ -66,7 +74,7 @@ renderParen =
 data BinOp
   = AndOp
   | OrOp
-  deriving (Show, Read, Eq, Generic)
+  deriving (Show, Eq, Generic)
 
 instance Validity BinOp
 
@@ -82,7 +90,7 @@ newtype Piece = Piece
   { pieceText :: Text
   }
   deriving stock (Generic)
-  deriving newtype (Show, Read, IsString, Eq, Ord)
+  deriving newtype (Show, IsString, Eq)
 
 instance Validity Piece where
   validate p@(Piece t) =
@@ -118,7 +126,7 @@ data Part
   | PartColumn
   | PartPiece Piece
   | PartBinOp BinOp
-  deriving (Show, Read, Eq, Generic)
+  deriving (Show, Eq, Generic)
 
 instance Validity Part
 
@@ -137,7 +145,7 @@ newtype Parts = Parts
   { unParts :: [Part]
   }
   deriving stock (Generic)
-  deriving newtype (Show, Read, Eq)
+  deriving newtype (Show, Eq)
 
 instance IsList Parts where
   type Item Parts = Part
@@ -163,8 +171,6 @@ instance Validity Parts where
                  in b && go (p2 : rest)
            in go ps
       ]
-
-instance NFData Parts
 
 renderParts :: Parts -> Text
 renderParts = T.concat . map renderPart . unParts
@@ -200,7 +206,7 @@ type TP = Parsec Text ()
 
 type PP = Parsec [Part] ()
 
-part :: Monad m => (Part -> Bool) -> ParsecT [Part] u m Part
+part :: (Monad m) => (Part -> Bool) -> ParsecT [Part] u m Part
 part func = tokenPrim showPart nextPos testPart
   where
     showPart = show
@@ -254,11 +260,7 @@ data KeyWord
   | KeyWordSub
   | KeyWordOrd
   | KeyWordNot
-  deriving (Show, Eq, Generic)
-
-instance Validity KeyWord
-
-instance NFData KeyWord
+  deriving (Show, Eq)
 
 parseKeyword :: Text -> Maybe KeyWord
 parseKeyword =
@@ -317,24 +319,6 @@ renderKeyWord =
     KeyWordSub -> "sub"
     KeyWordOrd -> "ord"
     KeyWordNot -> "not"
-
-anyKeyWordP :: PP KeyWord
-anyKeyWordP = do
-  p <- pieceP
-  case parseKeywordPiece p of
-    Just kw -> pure kw
-    Nothing -> fail $ "not a keyword: " <> T.unpack (pieceText p)
-
-keyWordP :: KeyWord -> PP ()
-keyWordP kw = do
-  p <- pieceP
-  case parseKeywordPiece p of
-    Just kw'
-      | kw' == kw' -> pure ()
-    _ ->
-      fail $
-        "expected keyword: " <> T.unpack (renderKeyWord kw) <> " got: "
-          <> T.unpack (pieceText p)
 
 data Ast
   = AstBinOp Ast BinOp Ast
@@ -543,8 +527,6 @@ instance FilterSubString Tag where
 
 class FilterOrd a
 
-instance FilterOrd Word
-
 instance FilterOrd Time
 
 instance FilterOrd Timestamp
@@ -553,7 +535,7 @@ class FilterArgument a where
   renderArgument :: a -> Text
   parseArgument :: Text -> Either String a
 
-parseArgumentPiece :: FilterArgument a => Piece -> Either String a
+parseArgumentPiece :: (FilterArgument a) => Piece -> Either String a
 parseArgumentPiece = parseArgument . pieceText
 
 instance FilterArgument Bool where
@@ -783,6 +765,9 @@ instance FromJSON (Filter (Path Rel File, ForestCursor Entry)) where
 foldFilterAnd :: NonEmpty (Filter a) -> Filter a
 foldFilterAnd = foldl1 FilterAnd
 
+foldFilterOr :: NonEmpty (Filter a) -> Filter a
+foldFilterOr = foldl1 FilterOr
+
 filterPredicate :: Filter a -> a -> Bool
 filterPredicate = go
   where
@@ -836,15 +821,15 @@ renderFilterAst = go
   where
     go :: Filter a -> Ast
     go =
-      let pa :: FilterArgument a => a -> Ast
+      let pa :: (FilterArgument a) => a -> Ast
           pa a = AstPiece $ Piece $ renderArgument a
-          paa :: FilterArgument a => a -> Ast -> Ast
+          paa :: (FilterArgument a) => a -> Ast -> Ast
           paa a = AstUnOp (Piece $ renderArgument a)
           pkw :: KeyWord -> Ast -> Ast
           pkw kw = AstUnOp (Piece $ renderKeyWord kw)
           kwa :: KeyWord -> Filter a -> Ast
           kwa kw f' = pkw kw $ go f'
-          kwp :: FilterArgument a => KeyWord -> a -> Ast
+          kwp :: (FilterArgument a) => KeyWord -> a -> Ast
           kwp kw a = pkw kw $ pa a
           kwb :: Filter a -> BinOp -> Filter a -> Ast
           kwb f1 bo f2 = AstBinOp (go f1) bo (go f2)
@@ -883,15 +868,15 @@ renderFilterAstExplicit = go
   where
     go :: Filter a -> Ast
     go =
-      let pa :: FilterArgument a => a -> Ast
+      let pa :: (FilterArgument a) => a -> Ast
           pa a = AstPiece $ Piece $ renderArgument a
-          paa :: FilterArgument a => a -> Ast -> Ast
+          paa :: (FilterArgument a) => a -> Ast -> Ast
           paa a = AstUnOp (Piece $ renderArgument a)
           pkw :: KeyWord -> Ast -> Ast
           pkw kw = AstUnOp (Piece $ renderKeyWord kw)
           kwa :: KeyWord -> Filter a -> Ast
           kwa kw f' = pkw kw $ go f'
-          kwp :: FilterArgument a => KeyWord -> a -> Ast
+          kwp :: (FilterArgument a) => KeyWord -> a -> Ast
           kwp kw a = pkw kw $ pa a
           kwb :: Filter a -> BinOp -> Filter a -> Ast
           kwb f1 bo f2 = AstBinOp (go f1) bo (go f2)
@@ -925,7 +910,7 @@ data FilterParseError
   = TokenisationError ParseError
   | ParsingError ParseError
   | TypeCheckingError FilterTypeError
-  deriving (Show, Eq, Generic)
+  deriving (Show)
 
 prettyFilterParseError :: FilterParseError -> Text
 prettyFilterParseError =
@@ -953,7 +938,7 @@ data FilterTypeError
   | FTEThisKeyWordExpected [KeyWord] KeyWord -- Expected, actual
   | FTEArgumentExpected Piece String
   | FTENoChoices
-  deriving (Show, Eq, Generic)
+  deriving (Show)
 
 prettyFilterTypeError :: FilterTypeError -> Text
 prettyFilterTypeError =
@@ -1006,7 +991,7 @@ tcPiece func =
     AstPiece p -> func p
     ast -> Left $ FTEPieceExpected ast
 
-tcArgumentPiece :: FilterArgument a => (a -> TCE b) -> TC b
+tcArgumentPiece :: (FilterArgument a) => (a -> TCE b) -> TC b
 tcArgumentPiece func =
   tcPiece $ \p ->
     case parseArgumentPiece p of
@@ -1019,7 +1004,7 @@ tcUnOp func =
     AstUnOp p a -> func p a
     ast -> Left $ FTEUnOpExpected ast
 
-tcArgumentOp :: FilterArgument a => (a -> TC b) -> TC b
+tcArgumentOp :: (FilterArgument a) => (a -> TC b) -> TC b
 tcArgumentOp func =
   tcUnOp $ \p a ->
     case parseArgumentPiece p of

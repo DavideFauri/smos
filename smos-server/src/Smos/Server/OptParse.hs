@@ -1,292 +1,222 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Smos.Server.OptParse
-  ( module Smos.Server.OptParse,
-    module Smos.Server.OptParse.Types,
+  ( Settings (..),
+    MonetisationSettings (..),
+    getSettings,
   )
 where
 
-import Autodocodec.Yaml
-import Control.Arrow
+import Autodocodec
 import Control.Monad.Logger
-import Data.Maybe
+import Crypto.JOSE.JWK (JWK)
+import Data.Aeson as JSON (eitherDecode)
+import Data.Aeson.Encode.Pretty as JSON (encodePretty)
+import qualified Data.ByteString.Lazy as LB
 import Data.SemVer as Version (toString)
-import qualified Data.Set as S
+import Data.Set (Set)
+import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Version
-import qualified Env
+import Data.Time
+import Data.UUID.Typed (nextRandomUUID)
+import Data.Word
 import Looper
-import Options.Applicative
-import Options.Applicative.Help.Pretty as Doc
+import OptEnvConf
+import Path
 import Path.IO
-import Paths_smos_server
+import Paths_smos_server (version)
+import Servant.Auth.Server as Auth
 import Smos.API
+import Smos.CLI.Logging ()
+import Smos.Data
 import Smos.Server.Looper.BackupGarbageCollector
-import Smos.Server.OptParse.Types
-import qualified System.Environment as System
 
 getSettings :: IO Settings
-getSettings = do
-  flags <- getFlags
-  env <- getEnvironment
-  config <- getConfiguration flags env
-  combineToSettings flags env config
+getSettings =
+  runSettingsParser version $
+    unlines $
+      concat
+        [ [ "Smos' API server",
+            "",
+            "Server API version: " <> Version.toString apiVersion,
+            ""
+          ],
+          readDataVersionsHelpMessage
+        ]
 
-combineToSettings :: Flags -> Environment -> Maybe Configuration -> IO Settings
-combineToSettings Flags {..} Environment {..} mc = do
-  let settingLogLevel =
-        fromMaybe LevelWarn $ flagLogLevel <|> envLogLevel <|> (mc >>= confLogLevel)
-  let settingPort = fromMaybe 8000 $ flagPort <|> envPort <|> (mc >>= confPort)
-  settingUUIDFile <-
-    case flagUUIDFile <|> envUUIDFile <|> (mc >>= confUUIDFile) of
-      Nothing -> resolveFile' "smos-server-uuid.json"
-      Just fp -> resolveFile' fp
+data Settings = Settings
+  { settingLogLevel :: !LogLevel,
+    settingUUID :: !ServerUUID,
+    settingDatabaseFile :: !(Path Abs File),
+    settingSigningKey :: !JWK,
+    settingPort :: !Int,
+    settingMaxBackupsPerPeriodPerUser :: ![(NominalDiffTime, Word)],
+    settingMaxBackupSizePerUser :: !(Maybe Word64),
+    settingAutoBackupLooperSettings :: !LooperSettings,
+    settingBackupGarbageCollectionLooperSettings :: !LooperSettings,
+    settingFileMigrationLooperSettings :: !LooperSettings,
+    settingAdmin :: !(Maybe Username),
+    settingBookingEmailAddress :: !(Maybe Text),
+    settingMonetisationSettings :: !(Maybe MonetisationSettings)
+  }
+  deriving (Show)
+
+instance HasParser Settings where
+  settingsParser = parseSettings
+
+{-# ANN parseSettings ("NOCOVER" :: String) #-}
+parseSettings :: OptEnvConf.Parser Settings
+parseSettings = subEnv_ "smos-server" $ withLocalYamlConfig $ do
+  settingLogLevel <- settingsParser
+  settingUUID <-
+    checkMapIO
+      ( \path -> do
+          mContents <- forgivingAbsence $ LB.readFile $ fromAbsFile path
+          case mContents of
+            Nothing -> do
+              u <- nextRandomUUID
+              ensureDir (parent path)
+              LB.writeFile (fromAbsFile path) $ JSON.encodePretty u
+              pure $ Right u
+            Just cts -> pure $ JSON.eitherDecode cts
+      )
+      $ filePathSetting
+        [ help "The file to store the server uuid in",
+          name "uuid-file",
+          value "smos-server-uuid.json"
+        ]
   settingDatabaseFile <-
-    case flagDatabaseFile <|> envDatabaseFile <|> (mc >>= confDatabaseFile) of
-      Nothing -> resolveFile' "smos-server-database.sqlite3"
-      Just fp -> resolveFile' fp
-  settingSigningKeyFile <-
-    case flagSigningKeyFile <|> envSigningKeyFile <|> (mc >>= confSigningKeyFile) of
-      Nothing -> resolveFile' "smos-signing-key.json"
-      Just fp -> resolveFile' fp
-  let settingMaxBackupsPerPeriodPerUser = fromMaybe defaultPeriods $ mc >>= confMaxBackupsPerPeriodPerUser
-  let settingMaxBackupSizePerUser = flagMaxBackupSizePerUser <|> envMaxBackupSizePerUser <|> (mc >>= confMaxBackupSizePerUser)
-  let settingAutoBackupLooperSettings =
-        deriveLooperSettings
-          0
-          (hours 1)
-          flagAutoBackupLooperFlags
-          envAutoBackupLooperEnv
-          (mc >>= confAutoBackupLooperConfiguration)
-  let settingBackupGarbageCollectionLooperSettings =
-        deriveLooperSettings
-          (minutes 1)
-          (hours 1)
-          flagBackupGarbageCollectionLooperFlags
-          envBackupGarbageCollectionLooperEnv
-          (mc >>= confBackupGarbageCollectionLooperConfiguration)
-  let settingFileMigrationLooperSettings =
-        deriveLooperSettings
-          (minutes 2)
-          (hours 24)
-          flagFileMigrationLooperFlags
-          envFileMigrationLooperEnv
-          (mc >>= confFileMigrationLooperConfiguration)
-  let settingAdmin = flagAdmin <|> envAdmin <|> (mc >>= confAdmin)
-  let settingMonetisationSettings =
-        combineToMonetisationSettings
-          flagMonetisationFlags
-          envMonetisationEnv
-          (mc >>= confMonetisationConf)
+    filePathSetting
+      [ help "The file to store the server database in",
+        name "database-file",
+        value "smos-server-database.sqlite3"
+      ]
+  settingSigningKey <-
+    checkMapIO
+      ( \path -> do
+          mErrOrKey <- forgivingAbsence $ JSON.eitherDecode <$> LB.readFile (toFilePath path)
+          case mErrOrKey of
+            Nothing -> do
+              key_ <- Auth.generateKey
+              LB.writeFile (toFilePath path) (JSON.encodePretty key_)
+              pure $ Right key_
+            Just (Left err) -> pure (Left err)
+            Just (Right r) -> pure (Right r)
+      )
+      $ filePathSetting
+        [ help "The file to store the JWT signing key in",
+          name "signing-key-file",
+          value "smos-signing-key.json"
+        ]
+  settingPort <-
+    setting
+      [ help "The port to serve web requests on",
+        reader auto,
+        name "port",
+        value 8000,
+        metavar "PORT"
+      ]
+  settingMaxBackupsPerPeriodPerUser <-
+    setting
+      [ help "The maximum number of bytes that backups can take up per user",
+        confWith
+          "max-backups-per-user-per-period"
+          ( singleOrListCodec $
+              object "Period" $
+                (,)
+                  <$> requiredField "period" "period, in seconds"
+                    .= fst
+                  <*> requiredField "max-backups" "maximum backups in this period"
+                    .= snd
+          ),
+        value defaultPeriods
+      ]
+  settingMaxBackupSizePerUser <-
+    optional $
+      setting
+        [ help "The maximum number of bytes that backups can take up per user",
+          reader auto,
+          name "max-backup-size-per-user",
+          metavar "BYTES"
+        ]
+  settingAutoBackupLooperSettings <-
+    parseLooperSettings
+      "auto-backup"
+      True
+      (seconds 30)
+      (hours 1)
+  settingBackupGarbageCollectionLooperSettings <-
+    parseLooperSettings
+      "backup-garbage-collector"
+      True
+      (minutes 1)
+      (hours 1)
+  settingFileMigrationLooperSettings <-
+    parseLooperSettings
+      "file-migrator"
+      True
+      (minutes 2)
+      (hours 24)
+  settingAdmin <-
+    optional $
+      setting
+        [ help "The user that will have admin rights",
+          reader $ eitherReader $ parseUsernameWithError . T.pack,
+          name "admin",
+          metavar "USERNAMES"
+        ]
+  settingBookingEmailAddress <-
+    optional $
+      setting
+        [ help "Email address to send booking emails from",
+          reader str,
+          name "booking-email-address",
+          metavar "EMAIL_ADDRESS"
+        ]
+  settingMonetisationSettings <- optional $ subSettings "monetisation"
   pure Settings {..}
 
-combineToMonetisationSettings :: MonetisationFlags -> MonetisationEnvironment -> Maybe MonetisationConfiguration -> Maybe MonetisationSettings
-combineToMonetisationSettings MonetisationFlags {..} MonetisationEnvironment {..} mc =
-  MonetisationSettings
-    <$> (monetisationFlagStripeSecretKey <|> monetisationEnvStripeSecretKey <|> (mc >>= monetisationConfStripeSecretKey))
-    <*> (monetisationFlagStripePublishableKey <|> monetisationEnvStripePublishableKey <|> (mc >>= monetisationConfStripePublishableKey))
-    <*> (monetisationFlagStripePrice <|> monetisationEnvStripePrice <|> (mc >>= monetisationConfStripePrice))
-    <*> pure (S.unions [monetisationFlagFreeloaders, monetisationEnvFreeloaders, maybe S.empty monetisationConfFreeloaders mc])
+data MonetisationSettings = MonetisationSettings
+  { monetisationSetStripeSecretKey :: !Text,
+    monetisationSetStripePublishableKey :: !Text,
+    monetisationSetStripePrice :: !Text,
+    monetisationSetFreeloaders :: !(Set Username)
+  }
+  deriving (Show)
 
-getEnvironment :: IO Environment
-getEnvironment = Env.parse (Env.header "Enviromnent") environmentParser
+instance HasParser MonetisationSettings where
+  settingsParser = parseMonetisationSettings
 
-environmentParser :: Env.Parser Env.Error Environment
-environmentParser =
-  Env.prefixed "SMOS_SERVER_" $
-    Environment
-      <$> optional (Env.var Env.str "CONFIG_FILE" (Env.help "Config file"))
-      <*> optional (Env.var (left Env.UnreadError . parseLogLevel) "LOG_LEVEL" (Env.help "The minimal severity of log messages"))
-      <*> optional (Env.var Env.str "UUID_FILE" (Env.help "The file to store the server uuid in"))
-      <*> optional (Env.var Env.str "DATABASE_FILE" (Env.help "The file to store the server database in"))
-      <*> optional (Env.var Env.str "SIGNING_KEY_FILE" (Env.help "The file to store the JWT signing key in"))
-      <*> optional (Env.var Env.auto "PORT" (Env.help "The port to serve web requests on"))
-      <*> optional (Env.var Env.auto "MAX_BACKUP_SIZE_PER_USER" (Env.help "The maximum number of bytes that backups can take up per user"))
-      <*> looperEnvironmentParser "AUTO_BACKUP"
-      <*> looperEnvironmentParser "BACKUP_GARBAGE_COLLECTOR"
-      <*> looperEnvironmentParser "FILE_MIGRATOR"
-      <*> optional (Env.var (left Env.UnreadError . parseUsernameWithError . T.pack) "ADMIN" (Env.help "The user that will have admin rights"))
-      <*> monetisationEnvironmentParser
-
-monetisationEnvironmentParser :: Env.Parser Env.Error MonetisationEnvironment
-monetisationEnvironmentParser =
-  MonetisationEnvironment
-    <$> optional (Env.var Env.str "STRIPE_SECRET_KEY" (Env.help "The stripe api secret key"))
-    <*> optional (Env.var Env.str "STRIPE_PUBLISHABLE_KEY" (Env.help "The stripe api publishable key"))
-    <*> optional (Env.var Env.str "STRIPE_PRICE" (Env.help "The stripe price id"))
-    <*> Env.var
-      ( left Env.UnreadError
-          . fmap S.fromList
-          . mapM (parseUsernameWithError . T.strip)
-          . T.splitOn ","
-          . T.pack
-      )
-      "FREELOADERS"
-      (Env.def S.empty <> Env.help "The usernames of users that will not have to pay, comma separated")
-
-getConfiguration :: Flags -> Environment -> IO (Maybe Configuration)
-getConfiguration Flags {..} Environment {..} =
-  case flagConfigFile <|> envConfigFile of
-    Nothing -> pure Nothing
-    Just cf -> resolveFile' cf >>= readYamlConfigFile
-
-getFlags :: IO Flags
-getFlags = do
-  args <- System.getArgs
-  let result = runFlagsParser args
-  handleParseResult result
-
-runFlagsParser :: [String] -> ParserResult Flags
-runFlagsParser = execParserPure prefs_ flagsParser
-  where
-    prefs_ =
-      defaultPrefs
-        { prefShowHelpOnError = True,
-          prefShowHelpOnEmpty = True
-        }
-
-flagsParser :: ParserInfo Flags
-flagsParser = info (helper <*> parseFlags) help_
-  where
-    help_ = fullDesc <> progDescDoc (Just description)
-    description :: Doc
-    description =
-      Doc.vsep $
-        map
-          Doc.text
-          [ "",
-            "Smos API Server version: " <> showVersion version,
-            "",
-            "Server API version: " <> Version.toString apiVersion
-          ]
-
-parseFlags :: Parser Flags
-parseFlags =
-  Flags
-    <$> optional
-      ( strOption
-          ( mconcat
-              [ long "config-file",
-                help "The config file to use",
-                metavar "FILEPATH"
-              ]
-          )
-      )
-    <*> optional
-      ( option
-          (eitherReader parseLogLevel)
-          ( mconcat
-              [ long "log-level",
-                help $
-                  unwords
-                    [ "The log level to use, options:",
-                      show $ map renderLogLevel [LevelDebug, LevelInfo, LevelWarn, LevelError]
-                    ]
-              ]
-          )
-      )
-    <*> optional
-      ( strOption
-          ( mconcat
-              [ long "uuid-file",
-                help "The file to use for the server uuid",
-                metavar "FILEPATH"
-              ]
-          )
-      )
-    <*> optional
-      ( strOption
-          ( mconcat
-              [ long "database-file",
-                help "The file to use for the server database",
-                metavar "FILEPATH"
-              ]
-          )
-      )
-    <*> optional
-      ( strOption
-          ( mconcat
-              [ long "signing-key-file",
-                help "The file to use for the JWT signing key database",
-                metavar "FILEPATH"
-              ]
-          )
-      )
-    <*> optional
-      ( option
-          auto
-          ( mconcat
-              [ long "port",
-                help "The port to serve on",
-                metavar "PORT"
-              ]
-          )
-      )
-    <*> optional
-      ( option
-          auto
-          ( mconcat
-              [ long "max-backup-size-per-user",
-                metavar "BYTES",
-                help "The maximum number of bytes that backups can take up per user"
-              ]
-          )
-      )
-    <*> getLooperFlags "auto-backup"
-    <*> getLooperFlags "backup-garbage-collector"
-    <*> getLooperFlags "file-migrator"
-    <*> optional
-      ( option
-          (eitherReader $ parseUsernameWithError . T.pack)
-          ( mconcat
-              [ long "admin",
-                metavar "USERNAME",
-                help "The user that will have admin rights"
-              ]
-          )
-      )
-    <*> parseMonetisationFlags
-
-parseMonetisationFlags :: Parser MonetisationFlags
-parseMonetisationFlags =
-  MonetisationFlags
-    <$> optional
-      ( strOption
-          ( mconcat
-              [ long "stripe-secret-key",
-                metavar "SECRET_KEY",
-                help "The stripe api secret key"
-              ]
-          )
-      )
-    <*> optional
-      ( strOption
-          ( mconcat
-              [ long "stripe-publishable-key",
-                metavar "PUBLISHABLE_KEY",
-                help "The stripe api publishable key"
-              ]
-          )
-      )
-    <*> optional
-      ( strOption
-          ( mconcat
-              [ long "stripe-price",
-                metavar "PRICE_ID",
-                help "The stripe price id"
-              ]
-          )
-      )
-    <*> ( S.fromList
-            <$> many
-              ( option
-                  (eitherReader $ parseUsernameWithError . T.pack)
-                  ( mconcat
-                      [ long "freeloader",
-                        metavar "USERNAME",
-                        help "The username of a user that will not have to pay"
-                      ]
-                  )
-              )
-        )
+{-# ANN parseMonetisationSettings ("NOCOVER" :: String) #-}
+parseMonetisationSettings :: OptEnvConf.Parser MonetisationSettings
+parseMonetisationSettings = do
+  monetisationSetStripeSecretKey <-
+    secretTextFileOrBareSetting
+      [ help "The stripe api secret key",
+        name "stripe-secret-key",
+        metavar "SECRET_KEY"
+      ]
+  monetisationSetStripePublishableKey <-
+    setting
+      [ help "The stripe api publishable key",
+        reader str,
+        name "stripe-publishable-key",
+        metavar "PUBLISHABLE_KEY"
+      ]
+  monetisationSetStripePrice <-
+    setting
+      [ help "The stripe price id",
+        reader str,
+        name "stripe-price",
+        metavar "PRICE_ID"
+      ]
+  monetisationSetFreeloaders <-
+    setting
+      [ help "The usernames of users that will not have to pay, comma separated",
+        reader $ commaSeparatedSet $ eitherReader $ parseUsernameWithError . T.strip . T.pack,
+        name "freeloaders",
+        metavar "USERNAME"
+      ]
+  pure MonetisationSettings {..}

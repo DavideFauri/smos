@@ -30,8 +30,12 @@
 
 /smos-scheduler SmosSchedulerR GET
 /smos-scheduler/template SmosSchedulerTemplateR GET
+/smos-scheduler/nixos SmosSchedulerNixosR GET
+!/smos-scheduler/#Text SmosSchedulerCommandR GET
 
-/smos-sync-client SmosSyncClientR GET
+/smos-sync SmosSyncR GET
+/smos-sync/nixos SmosSyncNixosR GET
+!/smos-sync/#Text SmosSyncCommandR GET
 
 /smos-server SmosServerR GET
 
@@ -40,19 +44,22 @@
 /smos-github SmosGitHubR GET
 /smos-github/#Text SmosGitHubCommandR GET
 
+/smos-jobhunt SmosJobHuntR GET
+/smos-jobhunt/#Text SmosJobHuntCommandR GET
+
 /nix/nixos-module NixosModuleR GET
 /nix/home-manager-module HomeManagerModuleR GET
 
 /sitemap.xml SitemapR GET
 /robots.txt RobotsR GET
 
+/dependency-graph DependencyGraphR GET
+
 /assets/*Texts AssetsR GET
 /assets-static AssetsStaticR EmbeddedStatic appAssets
 
-/casts/*Texts CastsR GET
-/casts-static CastsStaticR EmbeddedStatic appCasts
-
-/style StyleR EmbeddedStatic appStyle
+/web-assets/*Texts WebAssetsR GET
+/web-assets-static WebAssetsStaticR EmbeddedStatic appWebAssets
 
 /ws/reload ReloadR GET
 

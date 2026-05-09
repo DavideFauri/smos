@@ -1,9 +1,13 @@
 name: smos-server
-version: 0.9.1
+version: 0.15.0
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
 license: MIT
+
+
+extra-source-files:
+- templates/**/*
 
 dependencies:
 - base
@@ -13,47 +17,64 @@ library:
   ghc-options: -Wall
   build-tools: autoexporter
   dependencies:
+  - IntervalMap
   - aeson
   - aeson-pretty
+  - amazonka
+  - amazonka-ses
   - autodocodec
-  - autodocodec-yaml
+  - blaze-html
   - bytestring
   - conduit
   - containers
+  - cryptohash-sha256
   - dirforest
-  - envparse
+  - esqueleto
   - filepath
   - http-client
+  - http-types
+  - ical
   - jose
   - looper
   - mergeful
   - microlens
+  - mime-mail
   - monad-logger
   - mtl
-  - optparse-applicative
+  - network-uri
+  - opt-env-conf
   - path
   - path-io
   - persistent
+  - persistent-pagination
   - persistent-sqlite
   - pretty-show
+  - prometheus
+  - prometheus-ghc-stats
+  - prometheus-wai
+  - retry
   - semver
   - servant
   - servant-auth-server
   - servant-server
+  - shakespeare
   - smos-api
+  - smos-cli
   - smos-data
+  - smos-directory
   - smos-report
   - smos-stripe-client
   - template-haskell
   - text
   - time
   - typed-uuid
+  - tz
   - unliftio
-  - validity
-  - validity-persistent
+  - unliftio
   - wai
   - wai-extra
   - warp
+  - yaml
   - zip
   - zstd
 
@@ -61,5 +82,12 @@ executables:
   smos-server:
     main: Main.hs
     source-dirs: app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -with-rtsopts=-Iw60 # Only idle-gc once per minute
+    - -with-rtsopts=--nonmoving-gc # GC with more consistent latency
+    - -with-rtsopts=-T # Enable GHC Stats
     dependencies:
     - smos-server

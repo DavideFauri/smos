@@ -4,7 +4,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -16,6 +18,7 @@ module Smos.API
 where
 
 import Autodocodec
+import Autodocodec.Yaml
 import Control.Arrow
 import Control.DeepSeq
 import Control.Exception
@@ -25,13 +28,17 @@ import Data.ByteString.Base64 as Base64
 import qualified Data.ByteString.Char8 as SB8
 import qualified Data.ByteString.Lazy as LB
 import Data.DirForest (DirForest (..))
+import Data.Map (Map)
 import qualified Data.Mergeful as Mergeful
 import Data.Mergeful.Persistent ()
 import Data.Proxy
 import Data.SemVer as Version
+import Data.Set (Set)
+import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time
+import Data.Time.Zones.All
 import qualified Data.UUID as UUID
 import Data.UUID.Typed as UUID
 import Data.Validity
@@ -40,8 +47,10 @@ import Data.Validity.Path ()
 import Data.Validity.Text ()
 import Data.Validity.UUID ()
 import Data.Word
+import Data.Yaml.Builder (ToYaml)
 import Database.Persist
 import Database.Persist.Sql
+import qualified ICal
 import Path
 import Path.Internal
 import Servant.API as X
@@ -56,7 +65,7 @@ import Smos.Report.Agenda
 import Smos.Report.Next
 
 apiVersion :: Version
-apiVersion = version 0 3 0 [] []
+apiVersion = version 0 4 0 [] []
 
 smosAPI :: Proxy SmosAPI
 smosAPI = Proxy
@@ -70,57 +79,57 @@ data APIRoutes route = APIRoutes
   }
   deriving (Generic)
 
-smosUnprotectedAPI :: Proxy SmosUnprotectedAPI
-smosUnprotectedAPI = Proxy
-
-type SmosUnprotectedAPI = ToServantApi UnprotectedRoutes
-
 data UnprotectedRoutes route = UnprotectedRoutes
   { getApiVersion :: !(route :- GetAPIVersion),
     getMonetisation :: !(route :- GetMonetisation),
     postRegister :: !(route :- PostRegister),
     postLogin :: !(route :- PostLogin),
-    postStripeHook :: !(route :- PostStripeHook)
+    postStripeHook :: !(route :- PostStripeHook),
+    -- Booking
+    getBookingSettings :: !(route :- GetBookingSettings),
+    getBookingSlots :: !(route :- GetBookingSlots),
+    postBooking :: !(route :- PostBooking)
   }
   deriving (Generic)
-
-smosProtectedAPI :: Proxy SmosProtectedAPI
-smosProtectedAPI = Proxy
 
 type ProtectAPI = Auth '[JWT] AuthNCookie
 
 data AuthNCookie = AuthNCookie
   { authNCookieUsername :: Username
   }
-  deriving stock (Show, Eq, Ord, Generic)
   deriving (FromJSON, ToJSON) via (Autodocodec AuthNCookie)
 
 instance HasCodec AuthNCookie where
   codec =
     object "AuthNCookie" $
       AuthNCookie
-        <$> requiredField "username" "username" .= authNCookieUsername
+        <$> requiredField "username" "username"
+          .= authNCookieUsername
 
 instance FromJWT AuthNCookie
 
 instance ToJWT AuthNCookie
 
-type SmosProtectedAPI = ToServantApi ProtectedRoutes
-
 data ProtectedRoutes route = ProtectedRoutes
-  { getUserPermissions :: !(route :- ProtectAPI :> GetUserPermissions),
+  { -- Account
+    getUserPermissions :: !(route :- ProtectAPI :> GetUserPermissions),
     getUserSubscription :: !(route :- ProtectAPI :> GetUserSubscription),
     postInitiateStripeCheckoutSession :: !(route :- ProtectAPI :> PostInitiateStripeCheckoutSession),
     deleteUser :: !(route :- ProtectAPI :> DeleteUser),
+    -- Sync
     postSync :: !(route :- ProtectAPI :> PostSync),
+    -- Backups
     getListBackups :: !(route :- ProtectAPI :> GetListBackups),
     postBackup :: !(route :- ProtectAPI :> PostBackup),
     getBackup :: !(route :- ProtectAPI :> GetBackup),
     putRestoreBackup :: !(route :- ProtectAPI :> PutRestoreBackup),
     deleteBackup :: !(route :- ProtectAPI :> DeleteBackup),
+    -- Individual files
     getListSmosFiles :: !(route :- ProtectAPI :> GetListSmosFiles),
     getSmosFile :: !(route :- ProtectAPI :> GetSmosFile),
     putSmosFile :: !(route :- ProtectAPI :> PutSmosFile),
+    deleteSmosFile :: !(route :- ProtectAPI :> DeleteSmosFile),
+    -- Routes
     reportRoutes :: !(route :- "report" :> ToServantApi ReportRoutes)
   }
   deriving (Generic)
@@ -137,17 +146,18 @@ data Monetisation = Monetisation
   deriving stock (Show, Eq, Generic)
   deriving (FromJSON, ToJSON) via (Autodocodec Monetisation)
 
-instance Validity Monetisation
-
 instance NFData Monetisation
 
 instance HasCodec Monetisation where
   codec =
     object "Monetisation" $
       Monetisation
-        <$> requiredField "publishable-key" "Stripe publishable key" .= monetisationStripePublishableKey
-        <*> requiredField "currency" "currency of the price" .= monetisationStripePriceCurrency
-        <*> requiredField "price-per-year" "price per year, in minimal quantisations" .= monetisationStripePricePerYear
+        <$> requiredField "publishable-key" "Stripe publishable key"
+          .= monetisationStripePublishableKey
+        <*> requiredField "currency" "currency of the price"
+          .= monetisationStripePriceCurrency
+        <*> requiredField "price-per-year" "price per year, in minimal quantisations"
+          .= monetisationStripePricePerYear
 
 -- We cannot use PostNoContent because of this issue:
 -- https://github.com/haskell-servant/servant-auth/issues/177
@@ -158,7 +168,7 @@ data Register = Register
   { registerUsername :: Username,
     registerPassword :: Text
   }
-  deriving (Show, Eq, Generic)
+  deriving (Show, Generic)
   deriving (FromJSON, ToJSON) via (Autodocodec Register)
 
 instance Validity Register
@@ -187,7 +197,7 @@ data Login = Login
   { loginUsername :: Username,
     loginPassword :: Text
   }
-  deriving (Show, Eq, Generic)
+  deriving (Show, Generic)
   deriving (FromJSON, ToJSON) via (Autodocodec Login)
 
 instance Validity Login
@@ -214,7 +224,7 @@ type GetUserPermissions = "user" :> "permissions" :> Get '[JSON] UserPermissions
 data UserPermissions = UserPermissions
   { userPermissionsIsAdmin :: Bool
   }
-  deriving (Show, Eq, Generic)
+  deriving (Generic)
   deriving (FromJSON, ToJSON) via (Autodocodec UserPermissions)
 
 instance Validity UserPermissions
@@ -225,7 +235,8 @@ instance HasCodec UserPermissions where
   codec =
     object "UserPermissions" $
       UserPermissions
-        <$> optionalFieldWithDefault "admin" False "whether the user is an admin" .= userPermissionsIsAdmin
+        <$> optionalFieldWithDefault "admin" False "whether the user is an admin"
+          .= userPermissionsIsAdmin
 
 type GetUserSubscription = "user" :> "subscription" :> Get '[JSON] SubscriptionStatus
 
@@ -264,8 +275,10 @@ instance HasCodec SubscriptionStatus where
       subscribedUntilCodec =
         dimapCodec snd (\u -> ("", u)) $
           (,)
-            <$> requiredFieldWith "status" (literalTextCodec "subscribed") "status: subscribed" .= fst
-            <*> requiredField "until" "until when the subscription is active" .= snd
+            <$> requiredFieldWith "status" (literalTextCodec "subscribed") "status: subscribed"
+              .= fst
+            <*> requiredField "until" "until when the subscription is active"
+              .= snd
 
       notSubscribedCodec :: JSONObjectCodec ()
       notSubscribedCodec =
@@ -278,28 +291,23 @@ data InitiateStripeCheckoutSession = InitiateStripeCheckoutSession
   { initiateStripeCheckoutSessionSuccessUrl :: Text,
     initiateStripeCheckoutSessionCanceledUrl :: Text
   }
-  deriving stock (Show, Eq, Generic)
   deriving (FromJSON, ToJSON) via (Autodocodec InitiateStripeCheckoutSession)
-
-instance Validity InitiateStripeCheckoutSession
-
-instance NFData InitiateStripeCheckoutSession
 
 instance HasCodec InitiateStripeCheckoutSession where
   codec =
     object "InitiateStripeCheckoutSession" $
       InitiateStripeCheckoutSession
-        <$> requiredField "success" "success url" .= initiateStripeCheckoutSessionSuccessUrl
-        <*> requiredField "canceled" "canceled url" .= initiateStripeCheckoutSessionCanceledUrl
+        <$> requiredField "success" "success url"
+          .= initiateStripeCheckoutSessionSuccessUrl
+        <*> requiredField "canceled" "canceled url"
+          .= initiateStripeCheckoutSessionCanceledUrl
 
 data InitiatedCheckoutSession = InitiatedCheckoutSession
   { initiatedCheckoutSessionId :: Text,
     initiatedCheckoutSessionCustomerId :: Maybe Text
   }
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Generic)
   deriving (FromJSON, ToJSON) via (Autodocodec InitiatedCheckoutSession)
-
-instance Validity InitiatedCheckoutSession
 
 instance NFData InitiatedCheckoutSession
 
@@ -307,8 +315,10 @@ instance HasCodec InitiatedCheckoutSession where
   codec =
     object "InitiatedCheckoutSession" $
       InitiatedCheckoutSession
-        <$> requiredField "session" "session identifier" .= initiatedCheckoutSessionId
-        <*> optionalField "customer" "customer identifier" .= initiatedCheckoutSessionCustomerId
+        <$> requiredField "session" "session identifier"
+          .= initiatedCheckoutSessionId
+        <*> optionalField "customer" "customer identifier"
+          .= initiatedCheckoutSessionCustomerId
 
 type DeleteUser = "user" :> Verb 'DELETE 204 '[JSON] NoContent
 
@@ -330,9 +340,12 @@ instance HasCodec BackupInfo where
   codec =
     object "BackupInfo" $
       BackupInfo
-        <$> requiredField "uuid" "backup identifier" .= backupInfoUUID
-        <*> requiredField "time" "backup timestamp" .= backupInfoTime
-        <*> requiredField "size" "total size, in bytes" .= backupInfoSize
+        <$> requiredField "uuid" "backup identifier"
+          .= backupInfoUUID
+        <*> requiredField "time" "backup timestamp"
+          .= backupInfoTime
+        <*> requiredField "size" "total size, in bytes"
+          .= backupInfoSize
 
 type BackupUUID = UUID BackupInfo
 
@@ -369,7 +382,6 @@ newtype SyncFile = SyncFile
   { syncFileContents :: ByteString
   }
   deriving stock (Show, Eq, Generic)
-  deriving (FromJSON, ToJSON) via (Autodocodec SyncFile)
 
 instance Validity SyncFile
 
@@ -392,7 +404,7 @@ instance HasCodec SyncFile where
 data SyncRequest = SyncRequest
   { syncRequestItems :: Mergeful.SyncRequest (Path Rel File) (Path Rel File) SyncFile
   }
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Generic)
   deriving (FromJSON, ToJSON) via (Autodocodec SyncRequest)
 
 instance Validity SyncRequest
@@ -403,13 +415,14 @@ instance HasCodec SyncRequest where
   codec =
     object "SyncRequest" $
       SyncRequest
-        <$> requiredFieldWith "items" (codecViaAeson "Mergeful.SyncRequest") "sync request of the smos files" .= syncRequestItems
+        <$> requiredFieldWith "items" (codecViaAeson "Mergeful.SyncRequest") "sync request of the smos files"
+          .= syncRequestItems
 
 data SyncResponse = SyncResponse
   { syncResponseServerId :: ServerUUID,
     syncResponseItems :: Mergeful.SyncResponse (Path Rel File) (Path Rel File) SyncFile
   }
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Generic)
   deriving (FromJSON, ToJSON) via (Autodocodec SyncResponse)
 
 instance Validity SyncResponse
@@ -420,8 +433,10 @@ instance HasCodec SyncResponse where
   codec =
     object "SyncResponse" $
       SyncResponse
-        <$> requiredField "server-id" "identifier of the server" .= syncResponseServerId
-        <*> requiredFieldWith "items" (codecViaAeson "Mergeful.SyncResponse") "sync response of the smos files" .= syncResponseItems
+        <$> requiredField "server-id" "identifier of the server"
+          .= syncResponseServerId
+        <*> requiredFieldWith "items" (codecViaAeson "Mergeful.SyncResponse") "sync response of the smos files"
+          .= syncResponseItems
 
 instance FromHttpApiData (Path Rel File) where
   parseQueryParam t = left (T.pack . displayException :: SomeException -> Text) $ parseRelFile (T.unpack t)
@@ -435,7 +450,122 @@ type GetSmosFile = "file" :> QueryParam' '[Required, Strict] "path" (Path Rel Fi
 
 type PutSmosFile = "file" :> QueryParam' '[Required, Strict] "path" (Path Rel File) :> ReqBody '[JSON] SmosFile :> Verb 'PUT 204 '[JSON] NoContent
 
-type ReportsAPI = ToServantApi ReportRoutes
+type DeleteSmosFile = "file" :> QueryParam' '[Required, Strict] "path" (Path Rel File) :> Verb 'DELETE 204 '[JSON] NoContent
+
+data BookingSettings = BookingSettings
+  { bookingSettingName :: !Text,
+    bookingSettingEmailAddress :: !Text,
+    bookingSettingTimeZone :: !TZLabel,
+    bookingSettingAllowedDurations :: Set Word8,
+    bookingSettingMinimumDaysAhead :: Word8,
+    bookingSettingMaximumDaysAhead :: Word8,
+    bookingSettingEarliestTimeOfDay :: TimeOfDay,
+    bookingSettingLatestTimeOfDay :: TimeOfDay,
+    bookingSettingAllowedDays :: !(Set DayOfWeek)
+  }
+  deriving stock (Show, Eq, Generic)
+  deriving (FromJSON, ToJSON) via (Autodocodec BookingSettings)
+  deriving (ToYaml) via (AutodocodecYaml BookingSettings)
+
+instance Validity BookingSettings
+
+instance NFData BookingSettings
+
+instance HasCodec BookingSettings where
+  codec =
+    object "BookingSettings" $
+      BookingSettings
+        <$> requiredField "name" "user display name"
+          .= bookingSettingName
+        <*> requiredField "email-address" "user email address"
+          .= bookingSettingEmailAddress
+        <*> requiredField "time-zone" "user time zone"
+          .= bookingSettingTimeZone
+        <*> optionalFieldWithDefault
+          "allowed-duration"
+          (S.fromList [30, 60])
+          "Allowed durations, in minutes"
+          .= bookingSettingAllowedDurations
+        <*> optionalFieldWithDefault "minimum-days-ahead" 1 "Minimum days ahead"
+          .= bookingSettingMinimumDaysAhead
+        <*> optionalFieldWithDefault "maximum-days-ahead" 15 "Maximum days ahead"
+          .= bookingSettingMaximumDaysAhead
+        <*> optionalFieldWithDefault "earliest-time-of-day" (TimeOfDay 09 00 00) "Earliest time of day"
+          .= bookingSettingEarliestTimeOfDay
+        <*> optionalFieldWithDefault "latest-time-of-day" (TimeOfDay 17 00 00) "Latest time of day"
+          .= bookingSettingLatestTimeOfDay
+        <*> optionalFieldWithDefaultWith
+          "allowed-days"
+          (dimapCodec S.fromList S.toList (listCodec shownBoundedEnumCodec))
+          (S.fromList [Monday, Tuesday, Wednesday, Thursday, Friday])
+          "allowed days"
+          .= bookingSettingAllowedDays
+
+type GetBookingSettings = "book" :> Capture "username" Username :> "settings" :> Get '[JSON] BookingSettings
+
+type GetBookingSlots = "book" :> Capture "username" Username :> "slots" :> Capture "duration" Word8 :> Get '[JSON] BookingSlots
+
+data BookingSlots = BookingSlots {bookingSlots :: Map LocalTime NominalDiffTime}
+  deriving stock (Show, Generic)
+  deriving (FromJSON, ToJSON) via (Autodocodec BookingSlots)
+
+instance Validity BookingSlots
+
+instance NFData BookingSlots
+
+instance HasCodec BookingSlots where
+  codec =
+    object "BookingSlots" $
+      BookingSlots
+        <$> requiredField "slots" "slots with their duration"
+          .= bookingSlots
+
+type PostBooking =
+  "book"
+    :> Capture "username" Username
+    :> ReqBody '[JSON] Booking
+    :> Post '[ICal] ICal.ICalendar
+
+data Booking = Booking
+  { bookingClientName :: !Text,
+    bookingClientEmailAddress :: !Text,
+    bookingClientTimeZone :: !TZLabel,
+    bookingUTCTime :: !UTCTime,
+    bookingDuration :: !Word8,
+    bookingExtraInfo :: !(Maybe Text)
+  }
+  deriving stock (Show, Generic)
+  deriving (FromJSON, ToJSON) via (Autodocodec Booking)
+
+instance Validity Booking
+
+instance HasCodec Booking where
+  codec =
+    object "Booking" $
+      Booking
+        <$> requiredField "name" "client name"
+          .= bookingClientName
+        <*> requiredField "email-address" "client email address"
+          .= bookingClientEmailAddress
+        <*> requiredField "time-zone" "client time zone"
+          .= bookingClientTimeZone
+        <*> requiredField "time" "local time"
+          .= bookingUTCTime
+        <*> requiredField "duration" "duration, in minutes"
+          .= bookingDuration
+        <*> optionalField "extra-info" "extra information for both participants"
+          .= bookingExtraInfo
+
+data ICal
+
+instance Accept ICal where
+  contentType Proxy = "text/calendar"
+
+instance MimeRender ICal [ICal.Calendar] where
+  mimeRender Proxy = LB.fromStrict . ICal.renderICalendarByteString
+
+instance MimeUnrender ICal [ICal.Calendar] where
+  mimeUnrender Proxy = left displayException . fmap fst . ICal.runConform . ICal.parseICalendarByteString . LB.toStrict
 
 data ReportRoutes route = ReportRoutes
   { getNextActionReport :: !(route :- ProtectAPI :> GetNextActionReport),
@@ -447,13 +577,7 @@ type GetNextActionReport = "next" :> Get '[JSON] NextActionReport
 
 type GetAgendaReport = "agenda" :> Get '[JSON] AgendaReport
 
-reportsAPI :: Proxy ReportsAPI
-reportsAPI = Proxy
-
 type ProtectAdmin = Auth '[JWT] AuthNCookie
-
-newtype AdminCookie = AdminCookie {adminCookieUsername :: Username}
-  deriving (Show, Eq, Ord, Generic)
 
 data AdminRoutes route = AdminRoutes
   { postMigrateFiles :: !(route :- ProtectAPI :> PostMigrateFiles),
@@ -477,7 +601,7 @@ data UserInfo = UserInfo
     userInfoLastUse :: !(Maybe UTCTime),
     userInfoSubscribed :: !SubscriptionStatus
   }
-  deriving stock (Show, Eq, Generic)
+  deriving stock (Show, Generic)
   deriving (FromJSON, ToJSON) via (Autodocodec UserInfo)
 
 instance Validity UserInfo
@@ -488,11 +612,20 @@ instance HasCodec UserInfo where
   codec =
     object "UserInfo" $
       UserInfo
-        <$> requiredField "name" "user name" .= userInfoUsername
-        <*> optionalFieldWithDefault "admin" False "whether the user is an admin" .= userInfoAdmin
-        <*> requiredField "created" "user creation time" .= userInfoCreated
-        <*> requiredField "last-login" "last time the user logged in" .= userInfoLastLogin
-        <*> requiredField "last-use" "last time the user used the API" .= userInfoLastUse
-        <*> requiredField "subscribed" "user subscription status" .= userInfoSubscribed
+        <$> requiredField "name" "user name"
+          .= userInfoUsername
+        <*> optionalFieldWithDefault "admin" False "whether the user is an admin"
+          .= userInfoAdmin
+        <*> requiredField "created" "user creation time"
+          .= userInfoCreated
+        <*> requiredField "last-login" "last time the user logged in"
+          .= userInfoLastLogin
+        <*> requiredField "last-use" "last time the user used the API"
+          .= userInfoLastUse
+        <*> requiredField "subscribed" "user subscription status"
+          .= userInfoSubscribed
 
 type PutUserSubscription = "users" :> Capture "username" Username :> ReqBody '[JSON] UTCTime :> Verb 'PUT 204 '[JSON] NoContent
+
+bookingFilePath :: Path Rel File
+bookingFilePath = [relfile|server-config/booking.yaml|]

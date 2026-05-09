@@ -1,0 +1,18 @@
+ACTION REQUIRED: Add this event it to your calendar
+Some calendar providers, notably Google and Microsoft, do not automatically add calendar invites to your calendar.
+
+
+This is a calendar invite from #{bookingClientName} (#{bookingClientEmailAddress}) for #{bookingSettingName} (#{bookingSettingEmailAddress}).
+
+#{fromMaybe "" bookingExtraInfo}
+
+For #{bookingSettingName}:
+#{formatTime defaultTimeLocale "%A %H:%M %F" (utcToLocalTimeTZ (tzByLabel bookingSettingTimeZone) bookingUTCTime)}
+(#{renderTZLabel bookingSettingTimeZone})
+
+For #{bookingClientName}:
+#{formatTime defaultTimeLocale "%A %H:%M %F" (utcToLocalTimeTZ (tzByLabel bookingClientTimeZone) bookingUTCTime)}
+(#{renderTZLabel bookingClientTimeZone})
+
+
+Attached is an .ics file that contains the calendar invitation.

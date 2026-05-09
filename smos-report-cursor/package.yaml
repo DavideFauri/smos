@@ -1,5 +1,5 @@
 name: smos-report-cursor
-version: 0.3.0
+version: 0.6.1
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
@@ -14,11 +14,14 @@ library:
   - containers
   - cursor
   - deepseq
+  - dlist
   - microlens
   - path
   - smos-cursor
   - smos-data
+  - smos-directory
   - smos-report
   - time
+  - tz
   - validity
   - validity-path

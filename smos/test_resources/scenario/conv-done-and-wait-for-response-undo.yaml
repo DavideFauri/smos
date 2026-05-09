@@ -1,7 +1,0 @@
-before:
-- hello
-commands:
-- convDoneAndWaitForResponse
-- undo
-after:
-- hello

@@ -17,6 +17,7 @@ import Data.Validity
 import Data.Yaml.Builder (ToYaml (..))
 import qualified Data.Yaml.Builder as Yaml
 import GHC.Generics (Generic)
+import OptEnvConf
 import Text.Printf
 
 data TimeBlock
@@ -29,11 +30,19 @@ data TimeBlock
 
 instance Validity TimeBlock
 
-instance NFData TimeBlock
-
 instance FromJSON TimeBlock
 
 instance ToJSON TimeBlock
+
+instance HasParser TimeBlock where
+  settingsParser =
+    choice
+      [ setting [help "blocks of one day", switch DayBlock, long "day-block"],
+        setting [help "blocks of one week", switch WeekBlock, long "week-block"],
+        setting [help "blocks of one month", switch MonthBlock, long "month-block"],
+        setting [help "blocks of one year", switch YearBlock, long "year-block"],
+        setting [help "a single block", switch OneBlock, long "one-block"]
+      ]
 
 data Block a b = Block
   { blockTitle :: a,
@@ -56,9 +65,6 @@ instance (ToYaml a, ToYaml b) => ToYaml (Block a b) where
 
 mapBlockTitle :: (a -> b) -> Block a c -> Block b c
 mapBlockTitle func b = b {blockTitle = func $ blockTitle b}
-
-mapBlockEntries :: ([b] -> [c]) -> Block a b -> Block a c
-mapBlockEntries func b = b {blockEntries = func $ blockEntries b}
 
 divideIntoBlocks :: forall b. (b -> Day) -> TimeBlock -> [b] -> [Block Text b]
 divideIntoBlocks func tb es =
@@ -84,19 +90,12 @@ dayYear = (\(y, _, _) -> y) . toGregorian
 formatYearTitle :: YearNumber -> Text
 formatYearTitle = T.pack . printf "%04d"
 
+-- TODO get rid of this once we can use 'Data.Time.Calendar.Month'
 data MonthNumber = MonthNumber
   { monthNumberYear :: Integer,
     monthNumberMonth :: Int
   }
-  deriving (Show, Eq, Ord, Generic)
-
-instance Validity MonthNumber where
-  validate wn@MonthNumber {..} =
-    mconcat
-      [ genericValidate wn,
-        declare "The month number is positive" $ monthNumberMonth >= 0,
-        declare "The month number is less than or equal to 53" $ monthNumberMonth <= 53
-      ]
+  deriving (Eq, Ord)
 
 instance Enum MonthNumber where
   toEnum i = dayMonth $ ModifiedJulianDay $ toEnum i
@@ -114,15 +113,7 @@ data WeekNumber = WeekNumber
   { weekNumberYear :: Integer,
     weekNumberWeek :: Int
   }
-  deriving (Show, Eq, Ord, Generic)
-
-instance Validity WeekNumber where
-  validate wn@WeekNumber {..} =
-    mconcat
-      [ genericValidate wn,
-        declare "The week number is positive" $ weekNumberWeek >= 0,
-        declare "The week number is less than or equal to 53" $ weekNumberWeek <= 53
-      ]
+  deriving (Eq, Ord)
 
 instance Enum WeekNumber where
   toEnum i = dayWeek $ ModifiedJulianDay $ toEnum i
@@ -137,16 +128,16 @@ formatWeekTitle WeekNumber {..} =
   T.pack $ concat [printf "%04d" weekNumberYear, "-W", printf "%02d" weekNumberWeek]
 
 formatDayTitle :: Day -> Text
-formatDayTitle = T.pack . formatTime defaultTimeLocale "%F (%A)"
+formatDayTitle = T.pack . formatTime defaultTimeLocale "%F: %A"
 
-divideIntoTitledBlocks :: Ord t => (b -> t) -> [b] -> [Block t b]
+divideIntoTitledBlocks :: (Ord t) => (b -> t) -> [b] -> [Block t b]
 divideIntoTitledBlocks func =
   sortOn blockTitle . combineBlocksByName . map (turnIntoSingletonBlock func)
 
 turnIntoSingletonBlock :: (b -> t) -> b -> Block t b
 turnIntoSingletonBlock func b = Block {blockTitle = func b, blockEntries = [b]}
 
-combineBlocksByName :: Ord a => [Block a b] -> [Block a b]
+combineBlocksByName :: (Ord a) => [Block a b] -> [Block a b]
 combineBlocksByName = map comb . groupBy ((==) `on` blockTitle) . sortOn blockTitle
   where
     comb :: [Block a b] -> Block a b

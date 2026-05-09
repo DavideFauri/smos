@@ -16,9 +16,10 @@ module Smos.Types
 where
 
 import Autodocodec
-import Brick.Types as B hiding (Next)
+import Brick.Main as B (halt)
+import Brick.Types (BrickEvent (..), EventM)
 import Control.Concurrent.Async
-import Control.Monad.Reader
+import Control.Monad.Reader hiding (reader)
 import Control.Monad.State
 import qualified Control.Monad.Trans.Resource as Resource (InternalState)
 import Control.Monad.Writer
@@ -26,17 +27,28 @@ import Cursor.FileOrDir
 import Cursor.Simple.List.NonEmpty
 import Cursor.Text
 import Cursor.Types
-import Data.Aeson
 import qualified Data.Char as Char
+import Data.Function
+import Data.List
+import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
+import Data.Sequence (Seq)
+import Data.String
+import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time
-import Import
+import Data.Time.Zones
+import Data.Validity
+import GHC.Generics (Generic)
 import Lens.Micro
+import OptEnvConf
+import Path
+import Path.IO
 import Smos.Cursor.Entry
 import Smos.Cursor.FileBrowser
 import Smos.Cursor.Report.Entry
 import Smos.Cursor.Report.Next
+import Smos.Cursor.Report.Ongoing
 import Smos.Cursor.Report.Stuck
 import Smos.Cursor.Report.Timestamps
 import Smos.Cursor.Report.Waiting
@@ -44,16 +56,17 @@ import Smos.Cursor.Report.Work
 import Smos.Cursor.SmosFile
 import Smos.Cursor.SmosFileEditor
 import Smos.Keys
-import Smos.Monad
-import Smos.Report.Config
+import Smos.Monad hiding (reader)
+import Smos.Report.OptParse
+import qualified System.Directory as FP
 import UnliftIO.Resource
 
 data SmosConfig = SmosConfig
   { configKeyMap :: !KeyMap,
-    configReportConfig :: !SmosReportConfig,
-    configExplainerMode :: !Bool
+    configReportSettings :: !ReportSettings,
+    configExplainerMode :: !Bool,
+    configSandboxMode :: !Bool
   }
-  deriving (Generic)
 
 data KeyMap = KeyMap
   { keyMapFileKeyMap :: !FileKeyMap,
@@ -62,7 +75,6 @@ data KeyMap = KeyMap
     keyMapHelpKeyMap :: !HelpKeyMap,
     keyMapAnyKeyMap :: !KeyMappings
   }
-  deriving (Generic)
 
 instance Semigroup KeyMap where
   (<>) km1 km2 =
@@ -100,7 +112,6 @@ data FileKeyMap = FileKeyMap
     fileKeyMapLogbookMatchers :: !KeyMappings,
     fileKeyMapAnyMatchers :: !KeyMappings
   }
-  deriving (Generic)
 
 instance Semigroup FileKeyMap where
   (<>) km1 km2 =
@@ -171,7 +182,6 @@ data BrowserKeyMap = BrowserKeyMap
     browserKeyMapFilterMatchers :: KeyMappings,
     browserKeyMapAnyMatchers :: KeyMappings
   }
-  deriving (Generic)
 
 browserKeyMapActions :: BrowserKeyMap -> [AnyAction]
 browserKeyMapActions BrowserKeyMap {..} =
@@ -210,21 +220,23 @@ instance Monoid BrowserKeyMap where
 data ReportsKeyMap = ReportsKeyMap
   { reportsKeymapNextActionReportKeyMap :: !NextActionReportKeyMap,
     reportsKeymapWaitingReportKeyMap :: !WaitingReportKeyMap,
+    reportsKeymapOngoingReportKeyMap :: !OngoingReportKeyMap,
     reportsKeymapTimestampsReportKeyMap :: !TimestampsReportKeyMap,
     reportsKeymapStuckReportKeyMap :: !StuckReportKeyMap,
     reportsKeymapWorkReportKeyMap :: !WorkReportKeyMap,
     reportsKeymapAnyMatchers :: !KeyMappings
   }
-  deriving (Generic)
 
 instance Semigroup ReportsKeyMap where
   rkm1 <> rkm2 =
-    let ReportsKeyMap _ _ _ _ _ _ = undefined
+    let ReportsKeyMap _ _ _ _ _ _ _ = undefined
      in ReportsKeyMap
           { reportsKeymapNextActionReportKeyMap =
               reportsKeymapNextActionReportKeyMap rkm1 <> reportsKeymapNextActionReportKeyMap rkm2,
             reportsKeymapWaitingReportKeyMap =
               reportsKeymapWaitingReportKeyMap rkm1 <> reportsKeymapWaitingReportKeyMap rkm2,
+            reportsKeymapOngoingReportKeyMap =
+              reportsKeymapOngoingReportKeyMap rkm1 <> reportsKeymapOngoingReportKeyMap rkm2,
             reportsKeymapTimestampsReportKeyMap =
               reportsKeymapTimestampsReportKeyMap rkm1 <> reportsKeymapTimestampsReportKeyMap rkm2,
             reportsKeymapStuckReportKeyMap =
@@ -240,6 +252,7 @@ instance Monoid ReportsKeyMap where
     ReportsKeyMap
       { reportsKeymapNextActionReportKeyMap = mempty,
         reportsKeymapWaitingReportKeyMap = mempty,
+        reportsKeymapOngoingReportKeyMap = mempty,
         reportsKeymapTimestampsReportKeyMap = mempty,
         reportsKeymapStuckReportKeyMap = mempty,
         reportsKeymapWorkReportKeyMap = mempty,
@@ -248,10 +261,11 @@ instance Monoid ReportsKeyMap where
 
 reportsKeyMapActions :: ReportsKeyMap -> [AnyAction]
 reportsKeyMapActions ReportsKeyMap {..} =
-  let ReportsKeyMap _ _ _ _ _ _ = undefined
+  let ReportsKeyMap _ _ _ _ _ _ _ = undefined
    in concat
         [ nextActionReportKeyMapActions reportsKeymapNextActionReportKeyMap,
           waitingReportKeyMapActions reportsKeymapWaitingReportKeyMap,
+          ongoingReportKeyMapActions reportsKeymapOngoingReportKeyMap,
           timestampsReportKeyMapActions reportsKeymapTimestampsReportKeyMap,
           stuckReportKeyMapActions reportsKeymapStuckReportKeyMap,
           workReportKeyMapActions reportsKeymapWorkReportKeyMap,
@@ -263,7 +277,6 @@ data NextActionReportKeyMap = NextActionReportKeyMap
     nextActionReportSearchMatchers :: KeyMappings,
     nextActionReportAnyMatchers :: KeyMappings
   }
-  deriving (Generic)
 
 instance Semigroup NextActionReportKeyMap where
   narkm1 <> narkm2 =
@@ -298,7 +311,6 @@ data WaitingReportKeyMap = WaitingReportKeyMap
     waitingReportSearchMatchers :: KeyMappings,
     waitingReportAnyMatchers :: KeyMappings
   }
-  deriving (Generic)
 
 instance Semigroup WaitingReportKeyMap where
   narkm1 <> narkm2 =
@@ -328,12 +340,45 @@ waitingReportKeyMapActions WaitingReportKeyMap {..} =
           waitingReportAnyMatchers
         ]
 
+data OngoingReportKeyMap = OngoingReportKeyMap
+  { ongoingReportMatchers :: KeyMappings,
+    ongoingReportSearchMatchers :: KeyMappings,
+    ongoingReportAnyMatchers :: KeyMappings
+  }
+
+instance Semigroup OngoingReportKeyMap where
+  narkm1 <> narkm2 =
+    let OngoingReportKeyMap _ _ _ = undefined
+     in OngoingReportKeyMap
+          { ongoingReportMatchers = ongoingReportMatchers narkm1 <> ongoingReportMatchers narkm2,
+            ongoingReportSearchMatchers = ongoingReportSearchMatchers narkm1 <> ongoingReportSearchMatchers narkm2,
+            ongoingReportAnyMatchers = ongoingReportAnyMatchers narkm1 <> ongoingReportAnyMatchers narkm2
+          }
+
+instance Monoid OngoingReportKeyMap where
+  mappend = (<>)
+  mempty =
+    OngoingReportKeyMap
+      { ongoingReportMatchers = mempty,
+        ongoingReportSearchMatchers = mempty,
+        ongoingReportAnyMatchers = mempty
+      }
+
+ongoingReportKeyMapActions :: OngoingReportKeyMap -> [AnyAction]
+ongoingReportKeyMapActions OngoingReportKeyMap {..} =
+  let OngoingReportKeyMap _ _ _ = undefined
+   in concatMap
+        keyMappingsActions
+        [ ongoingReportMatchers,
+          ongoingReportSearchMatchers,
+          ongoingReportAnyMatchers
+        ]
+
 data TimestampsReportKeyMap = TimestampsReportKeyMap
   { timestampsReportMatchers :: KeyMappings,
     timestampsReportSearchMatchers :: KeyMappings,
     timestampsReportAnyMatchers :: KeyMappings
   }
-  deriving (Generic)
 
 instance Semigroup TimestampsReportKeyMap where
   narkm1 <> narkm2 =
@@ -367,7 +412,6 @@ data StuckReportKeyMap = StuckReportKeyMap
   { stuckReportMatchers :: KeyMappings,
     stuckReportAnyMatchers :: KeyMappings
   }
-  deriving (Generic)
 
 instance Semigroup StuckReportKeyMap where
   narkm1 <> narkm2 =
@@ -399,7 +443,6 @@ data WorkReportKeyMap = WorkReportKeyMap
     workReportSearchMatchers :: KeyMappings,
     workReportAnyMatchers :: KeyMappings
   }
-  deriving (Generic)
 
 instance Semigroup WorkReportKeyMap where
   narkm1 <> narkm2 =
@@ -439,7 +482,6 @@ data HelpKeyMap = HelpKeyMap
     helpKeyMapSearchMatchers :: !KeyMappings,
     helpKeyMapAnyMatchers :: !KeyMappings
   }
-  deriving (Generic)
 
 instance Semigroup HelpKeyMap where
   hkm1 <> hkm2 =
@@ -490,9 +532,8 @@ keyMappingAction = \case
 newtype ActionName = ActionName
   { actionNameText :: Text
   }
-  deriving stock (Show, Read, Eq, Ord, Generic)
+  deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (IsString, Semigroup, Monoid)
-  deriving (FromJSON, ToJSON) via (Autodocodec ActionName)
 
 instance Validity ActionName
 
@@ -504,17 +545,12 @@ data Action = Action
     actionFunc :: SmosM (),
     actionDescription :: Text
   }
-  deriving (Generic)
 
 data ActionUsing a = ActionUsing
   { actionUsingName :: ActionName,
     actionUsingFunc :: a -> SmosM (),
     actionUsingDescription :: Text
   }
-  deriving (Generic)
-
-instance Contravariant ActionUsing where
-  contramap func a = a {actionUsingFunc = actionUsingFunc a . func}
 
 data AnyAction
   = PlainAction Action
@@ -534,23 +570,24 @@ data SmosEvent
   = SmosUpdateTime
   | SmosSaveFile
 
-type SmosM = MkSmosM SmosConfig SmosState
+type SmosM = MkSmosM ResourceName SmosConfig SmosState
 
-runSmosM :: Resource.InternalState -> SmosConfig -> SmosState -> SmosM a -> EventM ResourceName ((MStop a, SmosState), [Text])
+runSmosM ::
+  Resource.InternalState ->
+  SmosConfig ->
+  SmosM a ->
+  EventM ResourceName SmosState (a, [Text])
 runSmosM = runMkSmosM
 
-runSmosM' :: SmosConfig -> SmosState -> SmosM a -> ResourceT IO ((MStop a, SmosState), [Text])
-runSmosM' = runMkSmosM'
-
 data SmosState = SmosState
-  { smosStateTime :: !ZonedTime,
+  { smosStateNow :: !UTCTime,
+    smosStateTimeZone :: !TZ,
     smosStateCursor :: !EditorCursor,
     smosStateKeyHistory :: !(Seq KeyPress),
     smosStateAsyncs :: ![Async ()],
     smosStateDebugInfo :: !DebugInfo,
     smosStateErrorMessages :: [Text] -- In reverse order
   }
-  deriving (Generic)
 
 addErrorMessage :: Text -> SmosM ()
 addErrorMessage t = tell [t]
@@ -563,7 +600,6 @@ runSmosAsync func = do
 data DebugInfo = DebugInfo
   { debugInfoLastMatches :: Maybe (NonEmpty ActivationDebug)
   }
-  deriving (Show, Eq, Generic)
 
 data ActivationDebug = ActivationDebug
   { activationDebugPrecedence :: Precedence,
@@ -571,30 +607,29 @@ data ActivationDebug = ActivationDebug
     activationDebugMatch :: Seq KeyPress,
     activationDebugName :: ActionName
   }
-  deriving (Show, Eq, Generic)
 
 data Priority
   = CatchAll
   | MatchAnyChar
   | MatchExact -- Has higher priority.
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord)
 
 data Precedence
   = AnyMatcher
   | SpecificMatcher -- Has higher priority.
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord)
 
 data ResourceName
   = ResourceTextCursor
   | ResourceViewport
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Ord)
 
 quit :: Action
 quit =
   Action
     { actionName = "quit",
       actionDescription = "Quit Smos",
-      actionFunc = MkSmosM $ NextT $ pure Stop
+      actionFunc = liftEventM B.halt
     }
 
 -- [ Help Cursor ] --
@@ -613,14 +648,14 @@ data HelpCursor = HelpCursor
     helpCursorKeyHelpCursors :: [KeyHelpCursor],
     helpCursorSelection :: HelpCursorSelection
   }
-  deriving (Show, Eq, Generic)
+  deriving (Show, Generic)
 
 instance Validity HelpCursor
 
 data HelpCursorSelection
   = HelpCursorHelpSelected
   | HelpCursorSearchSelected
-  deriving (Show, Eq, Generic)
+  deriving (Show, Generic)
 
 instance Validity HelpCursorSelection
 
@@ -781,7 +816,7 @@ data KeyCombination
   | PressAnyChar
   | PressAny
   | PressCombination KeyPress KeyCombination
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Generic)
 
 instance Validity KeyCombination
 
@@ -823,9 +858,34 @@ data EditorCursor = EditorCursor
 data StartingPath
   = StartingFile (Path Abs File)
   | StartingDir (Path Abs Dir)
-  deriving (Show, Eq)
 
-startEditorCursor :: (MonadIO m, MonadResource m) => StartingPath -> m (Maybe (Either String EditorCursor))
+instance HasParser StartingPath where
+  settingsParser =
+    mapIO
+      ( \fp -> do
+          dir <- getCurrentDir
+          resolveStartingPath dir fp
+      )
+      $ setting
+        [ help "the file to edit",
+          argument,
+          reader str,
+          metavar "FILE_OR_DIR",
+          completer filePath
+        ]
+
+resolveStartingPath :: Path Abs Dir -> FilePath -> IO StartingPath
+resolveStartingPath curDir fp = do
+  dirExists <- FP.doesDirectoryExist fp
+  if dirExists
+    then StartingDir <$> resolveDir curDir fp
+    else do
+      p <- resolveFile curDir fp
+      StartingFile <$> case fileExtension p of
+        Nothing -> replaceExtension ".smos" p
+        Just _ -> pure p
+
+startEditorCursor :: (MonadResource m) => StartingPath -> m (Maybe (Either String EditorCursor))
 startEditorCursor st = case st of
   StartingFile fp -> do
     mErrOrCursor <- startSmosFileEditorCursor fp
@@ -918,9 +978,8 @@ editorCursorSwitchToHelp km@KeyMap {..} ec =
                 Nothing -> Nothing
                 Just rc ->
                   let ReportsKeyMap {..} = keyMapReportsKeyMap
-                   in ( \(t, ms) -> withHelpBindings t $ ms ++ reportsKeymapAnyMatchers
-                      )
-                        $ case rc of
+                   in (\(t, ms) -> withHelpBindings t $ ms ++ reportsKeymapAnyMatchers) $
+                        case rc of
                           ReportNextActions NextActionReportCursor {..} ->
                             let NextActionReportKeyMap {..} = reportsKeymapNextActionReportKeyMap
                                 NextActionReportKeyMap _ _ _ = reportsKeymapNextActionReportKeyMap
@@ -935,6 +994,13 @@ editorCursorSwitchToHelp km@KeyMap {..} ec =
                                   case entryReportCursorSelection waitingReportCursorEntryReportCursor of
                                     EntryReportSelected -> ("Waiting Report", waitingReportMatchers)
                                     EntryReportFilterSelected -> ("Waiting Report, Search", waitingReportSearchMatchers)
+                          ReportOngoing OngoingReportCursor {..} ->
+                            let OngoingReportKeyMap {..} = reportsKeymapOngoingReportKeyMap
+                                OngoingReportKeyMap _ _ _ = reportsKeymapOngoingReportKeyMap
+                             in (\(t, ms) -> (t, ms ++ ongoingReportAnyMatchers)) $
+                                  case entryReportCursorSelection ongoingReportCursorEntryReportCursor of
+                                    EntryReportSelected -> ("Ongoing Report", ongoingReportMatchers)
+                                    EntryReportFilterSelected -> ("Ongoing Report, Search", ongoingReportSearchMatchers)
                           ReportTimestamps TimestampsReportCursor {..} ->
                             let TimestampsReportKeyMap {..} = reportsKeymapTimestampsReportKeyMap
                                 TimestampsReportKeyMap _ _ _ = reportsKeymapTimestampsReportKeyMap
@@ -957,27 +1023,20 @@ editorCursorSwitchToHelp km@KeyMap {..} ec =
           editorCursorSelection = HelpSelected
         }
 
-editorCursorUpdateTime :: ZonedTime -> EditorCursor -> EditorCursor
-editorCursorUpdateTime zt ec =
-  ec
-    { editorCursorFileCursor = smosFileEditorCursorUpdateTime zt <$> editorCursorFileCursor ec
-    }
+editorCursorUpdateTime :: TZ -> UTCTime -> EditorCursor -> EditorCursor
+editorCursorUpdateTime zone now ec = ec {editorCursorFileCursor = smosFileEditorCursorUpdateTime zone now <$> editorCursorFileCursor ec}
 
 data EditorSelection
   = FileSelected
   | BrowserSelected
   | ReportSelected
   | HelpSelected
-  deriving (Show, Eq, Generic)
-
-instance Validity EditorSelection
+  deriving (Eq)
 
 data ReportCursor
   = ReportNextActions !NextActionReportCursor
   | ReportWaiting !WaitingReportCursor
+  | ReportOngoing !OngoingReportCursor
   | ReportTimestamps !TimestampsReportCursor
   | ReportStuck !StuckReportCursor
   | ReportWork !WorkReportCursor
-  deriving (Show, Eq, Generic)
-
-instance Validity ReportCursor

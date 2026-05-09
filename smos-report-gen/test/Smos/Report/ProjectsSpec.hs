@@ -5,7 +5,7 @@ module Smos.Report.ProjectsSpec where
 
 import Data.Tree
 import Smos.Data
-import Smos.Report.Archive.Gen ()
+import Smos.Directory.Archive.Gen ()
 import Smos.Report.Filter.Gen ()
 import Smos.Report.Projects
 import Smos.Report.Projects.Gen ()
@@ -93,7 +93,8 @@ spec = do
             `shouldBe` Just nextEntry
 
   describe "makeProjectsReport" $
-    it "produces valid reports" $ producesValid makeProjectsReport
+    it "produces valid reports" $
+      producesValid makeProjectsReport
 
   pending "produceProjectsreport, which doesn't exist yet, produces valid reports for interesting stores."
 

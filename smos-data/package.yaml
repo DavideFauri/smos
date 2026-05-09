@@ -1,5 +1,5 @@
 name: smos-data
-version: 0.5.0
+version: 0.7.0
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
@@ -23,6 +23,7 @@ library:
   - semver
   - text
   - time
+  - tz
   - unliftio
   - validity
   - validity-containers

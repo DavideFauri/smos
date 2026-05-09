@@ -19,21 +19,21 @@ import qualified GitHub
 import Path
 import Path.IO
 import Smos.Data
+import Smos.Directory.Resolution
 import Smos.GitHub.Issue
 import Smos.GitHub.OptParse
-import Smos.Report.Config
 import System.Exit
 
 githubImport :: Settings -> ImportSettings -> IO ()
 githubImport Settings {..} ImportSettings {..} = do
-  case setGithubOauthToken of
+  case setGitHubOauthToken of
     Nothing -> putStrLn "WARNING: No OAUTH token configured. Some functionality may not work without it."
     Just _ -> pure ()
   case parseGitHubUrl importSetUrl of
     Nothing -> die $ "Could not parse as a URL of a github issue or pull request:" <> importSetUrl
     Just gitHubUrl -> do
       projectsDir <- resolveDirProjectsDir setDirectorySettings
-      let mAuth = GitHub.OAuth . TE.encodeUtf8 <$> setGithubOauthToken
+      let mAuth = GitHub.OAuth . TE.encodeUtf8 <$> setGitHubOauthToken
       mDetails <- forM mAuth $ \auth ->
         fetchDetails auth gitHubUrl
       now <- getCurrentTime
@@ -145,13 +145,13 @@ renderSmosProject now urlString gitHubUrl mDetails = do
 data ImportDetails = ImportDetails
   { importDetailTitle :: Text
   }
-  deriving (Show, Eq, Generic)
+  deriving (Show, Generic)
 
 instance Validity ImportDetails
 
 fetchDetails :: GitHub.Auth -> GitHubUrl -> IO ImportDetails
 fetchDetails auth gitHubUrl = do
-  let errOrGitHub :: FromJSON result => GitHub.Request rw result -> IO result
+  let errOrGitHub :: (FromJSON result) => GitHub.Request rw result -> IO result
       errOrGitHub request = do
         errOrResult <- github auth request
         case errOrResult of

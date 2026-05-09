@@ -64,6 +64,7 @@ import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe
 import Data.Time
+import Data.Time.Zones
 import Data.Validity
 import GHC.Generics (Generic)
 import Lens.Micro
@@ -344,7 +345,7 @@ smosFileCursorClockOutEverywhere :: UTCTime -> SmosFileCursor -> SmosFileCursor
 smosFileCursorClockOutEverywhere now =
   smosFileCursorForestCursorL %~ mapForestCursor (mapAndUncollapseIfChanged goEC) (mapAndUncollapseIfChanged goE)
   where
-    mapAndUncollapseIfChanged :: Eq a => (a -> a) -> CollapseEntry a -> CollapseEntry a
+    mapAndUncollapseIfChanged :: (Eq a) => (a -> a) -> CollapseEntry a -> CollapseEntry a
     mapAndUncollapseIfChanged func ce =
       let ce' = func <$> ce
        in if ce' == ce
@@ -358,12 +359,13 @@ smosFileCursorClockOutEverywhere now =
 smosFileCursorClockOutEverywhereAndClockInHere :: UTCTime -> SmosFileCursor -> SmosFileCursor
 smosFileCursorClockOutEverywhereAndClockInHere now sfc =
   let sfc' = smosFileCursorClockOutEverywhere now sfc
-   in sfc' & (smosFileCursorSelectedEntryL . entryCursorLogbookCursorL)
-        %~ (\lbc -> fromMaybe lbc $ logbookCursorClockIn now lbc)
+   in sfc'
+        & (smosFileCursorSelectedEntryL . entryCursorLogbookCursorL)
+          %~ (\lbc -> fromMaybe lbc $ logbookCursorClockIn now lbc)
         & (smosFileCursorSelectedCollapseEntryL . collapseEntryShowLogbookL .~ True)
 
-smosFileCursorUpdateTime :: ZonedTime -> SmosFileCursor -> SmosFileCursor
-smosFileCursorUpdateTime zt = smosFileCursorSelectedEntryL %~ entryCursorUpdateTime zt
+smosFileCursorUpdateTime :: TZ -> UTCTime -> SmosFileCursor -> SmosFileCursor
+smosFileCursorUpdateTime zone now = smosFileCursorSelectedEntryL %~ entryCursorUpdateTime zone now
 
 smosFileSubtreeSetTodoState :: UTCTime -> Maybe TodoState -> SmosFileCursor -> SmosFileCursor
 smosFileSubtreeSetTodoState now mts = smosFileCursorForestCursorL . forestCursorSelectedTreeL . treeCursorCurrentSubTreeL %~ go

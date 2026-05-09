@@ -11,9 +11,25 @@
 - ignore:
     name: "Use second"
 - ignore:
+    name: "Use rights"
+- ignore:
     name: "Use Just"
 - ignore:
     name: "Use void"
+- ignore:
+    name: "Use :"
+- ignore:
+    name: "Use const"
+- ignore:
+    name: "Use map once"
+- ignore:
+    name: "Use lambda-case"
+- ignore:
+    name: "Functor law"
+- ignore:
+    name: "Fuse concatMap/map"
+- ignore:
+    name: "Fuse mapMaybe/map"
 - ignore:
     name: "Reduce duplication"
 - ignore:
@@ -158,3 +174,12 @@
   # # > fromIntegral (300 :: Word) :: Word8
   # # 44
   # - {name: fromIntegral, within: []}
+# Until this we use a version of hlint that has this issue fixed:
+# https://github.com/ndmitchell/hlint/issues/1557
+- ignore:
+    name: "Unused LANGUAGE pragma"
+    within:
+      - Smos.Docs.Site.Changelog
+      - Smos.Docs.Site.ModuleDocs
+      - Smos.Docs.Site.DependencyGraph
+      - Smos.Docs.Site.Static

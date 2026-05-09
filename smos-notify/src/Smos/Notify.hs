@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -17,18 +16,18 @@ import qualified Data.Text as T
 import Data.Time
 import Database.Persist
 import Database.Persist.Sqlite
-import GHC.Generics (Generic)
 import Path
 import Path.IO
 import Paths_smos_notify
+import Smos.CLI.Logging
 import Smos.Data
+import Smos.Directory.Archive
+import Smos.Directory.Resolution
+import Smos.Directory.ShouldPrint
+import Smos.Directory.Streaming
 import Smos.Notify.DB
 import Smos.Notify.OptParse
-import Smos.Report.Archive
-import Smos.Report.Config
-import Smos.Report.ShouldPrint
-import Smos.Report.Streaming
-import System.Exit
+import System.FilePath
 import System.IO
 import System.Process
 import Text.Show.Pretty (ppShow)
@@ -37,55 +36,53 @@ import Text.Time.Pretty
 smosNotify :: IO ()
 smosNotify = do
   Settings {..} <- getSettings
-  runStderrLoggingT $
-    filterLogger (\_ ll -> ll >= setLogLevel) $ do
-      notifySendExecutable <- findNotifySend
-      mPlayExecutable <- findPlay
-      now <- liftIO getZonedTime
-      wd <- liftIO $ resolveDirWorkflowDir setDirectorySettings
-      logDebugN $ T.pack $ unwords ["Opening database at", fromAbsFile setDatabase]
-      ensureDir $ parent setDatabase
-      withSqlitePool (T.pack (fromAbsFile setDatabase)) 1 $ \pool ->
-        flip runSqlPool pool $ do
-          runMigration notifyMigration
-          notificationEvents <-
-            liftIO $ do
-              runConduit $
-                streamSmosFilesFromWorkflowRel HideArchive setDirectorySettings
-                  .| parseSmosFilesRel wd
-                  .| printShouldPrint (PrintWarning stderr)
-                  .| smosFileEntries
-                  .| C.concatMap (uncurry (parseNotificationEvent now))
-                  .| sinkList
-          notificationsToSend <- fmap catMaybes $
-            forM notificationEvents $ \ne -> do
-              let h = hash ne
-              mn <- getBy (UniqueSentNotification h)
-              case mn of
-                Just _ -> do
-                  logDebugN $ T.pack $ unwords ["Not sending notification for event with hash", show h, "because it has already had a notification sent."]
-                  pure Nothing -- Already sent, not sending another notification
-                Nothing -> pure $ Just ne
-          -- Don't play a sound if there are no notifications to send.
+  runFilteredLogger setLogLevel $ do
+    mPlayExecutable <- findPlay
+    now <- liftIO getZonedTime
+    wd <- liftIO $ resolveDirWorkflowDir setDirectorySettings
+    logDebugN $ T.pack $ unwords ["Opening database at", fromAbsFile setDatabase]
+    ensureDir $ parent setDatabase
+    withSqlitePool (T.pack (fromAbsFile setDatabase)) 1 $ \pool ->
+      flip runSqlPool pool $ do
+        runMigration notifyMigration
+        notificationEvents <-
+          liftIO $ do
+            runConduit $
+              streamSmosFilesFromWorkflowRel HideArchive setDirectorySettings
+                .| parseSmosFilesRel wd
+                .| printShouldPrint (PrintWarning stderr)
+                .| smosFileEntries
+                .| C.concatMap (uncurry (parseNotificationEvent now))
+                .| sinkList
+        notificationsToSend <- fmap catMaybes $
+          forM notificationEvents $ \ne -> do
+            let h = hash ne
+            mn <- getBy (UniqueSentNotification h)
+            case mn of
+              Just _ -> do
+                logDebugN $ T.pack $ unwords ["Not sending notification for event with hash", show h, "because it has already had a notification sent."]
+                pure Nothing -- Already sent, not sending another notification
+              Nothing -> pure $ Just ne
+        -- Don't play a sound if there are no notifications to send.
+        unless (null notificationsToSend) $ do
           logDebugN $ T.pack $ unwords ["Sending", show (length notificationsToSend), "notifications."]
-          unless (null notificationsToSend) $ do
-            forM_ notificationsToSend $ \ne -> do
-              logInfoN $ T.pack $ unlines ["Sending notification:", ppShow ne]
-              displayNotification notifySendExecutable (renderNotification now ne)
-              let h = hash ne
-              logDebugN $ T.pack $ unwords ["Inserting notification with hash", show h]
-              let nowUTC = zonedTimeToUTC now
-              -- Upsert insteam of insert just in case a two events have the
-              -- same hash if we used insert here instead, the program would
-              -- crash and the rest of the notifications wouldn't be sent.
-              upsertBy
-                (UniqueSentNotification h)
-                SentNotification
-                  { sentNotificationHash = h,
-                    sentNotificationTime = nowUTC
-                  }
-                [SentNotificationTime =. nowUTC]
-            mapM_ playDing mPlayExecutable
+          forM_ notificationsToSend $ \ne -> do
+            logInfoN $ T.pack $ unlines ["Sending notification:", ppShow ne]
+            displayNotification setNotifySend (renderNotification now ne)
+            let h = hash ne
+            logDebugN $ T.pack $ unwords ["Inserting notification with hash", show h]
+            let nowUTC = zonedTimeToUTC now
+            -- Upsert insteam of insert just in case a two events have the
+            -- same hash if we used insert here instead, the program would
+            -- crash and the rest of the notifications wouldn't be sent.
+            upsertBy
+              (UniqueSentNotification h)
+              SentNotification
+                { sentNotificationHash = h,
+                  sentNotificationTime = nowUTC
+                }
+              [SentNotificationTime =. nowUTC]
+          mapM_ playDing mPlayExecutable
 
 data NotificationEvent
   = NotifyTimestamp
@@ -94,14 +91,14 @@ data NotificationEvent
       !(Maybe Contents)
       !TimestampName
       !Timestamp
-  deriving (Show, Eq, Generic)
+  deriving (Show, Eq)
 
 instance Hashable NotificationEvent where
   hashWithSalt salt = \case
     NotifyTimestamp rf h mc tsn ts ->
       hashWithSalt salt $
         T.concat
-          [ T.pack (fromRelFile rf),
+          [ T.pack $ fromRelFile rf,
             headerText h,
             maybe T.empty contentsText mc,
             timestampNameText tsn,
@@ -110,7 +107,7 @@ instance Hashable NotificationEvent where
 
 renderNotification :: ZonedTime -> NotificationEvent -> Notification
 renderNotification now = \case
-  NotifyTimestamp _ h mc tsn ts ->
+  NotifyTimestamp rp h mc tsn ts ->
     let nowUTC = zonedTimeToUTC now
         tsLocalTime = timestampLocalTime ts
         tsUTC = localTimeToUTC (zonedTimeZone now) tsLocalTime
@@ -119,13 +116,19 @@ renderNotification now = \case
               T.unlines
                 [ T.unwords
                     [ timestampNameText tsn,
-                      T.pack (prettyTimeAuto nowUTC tsUTC) <> ", ",
+                      T.pack (prettyTimeAuto nowUTC tsUTC) <> ",",
                       "at",
                       T.pack (formatTime defaultTimeLocale "%H:%M" tsLocalTime <> ":")
                     ],
                   headerText h
                 ],
-            notificationBody = contentsText <$> mc
+            notificationBody =
+              Just $
+                T.unlines $
+                  concat
+                    [ [T.pack $ dropExtension $ fromRelFile rp],
+                      maybeToList $ contentsText <$> mc
+                    ]
           }
 
 -- | What we send to notify-send
@@ -133,7 +136,6 @@ data Notification = Notification
   { notificationSummary :: Text,
     notificationBody :: Maybe Text
   }
-  deriving (Show, Eq, Generic)
 
 parseNotificationEvent :: ZonedTime -> Path Rel File -> Entry -> [NotificationEvent]
 parseNotificationEvent now rf e = do
@@ -153,16 +155,6 @@ parseNotificationEvent now rf e = do
     Nothing -> True
     Just cts -> not $ "SMOS_NO_NOTIFY" `T.isInfixOf` contentsText cts
   pure $ NotifyTimestamp rf (entryHeader e) (entryContents e) tsn ts
-
-findNotifySend :: (MonadLogger m, MonadIO m) => m (Path Abs File)
-findNotifySend = do
-  rp <- liftIO $ parseRelFile "notify-send"
-  me <- findExecutable rp
-  case me of
-    Nothing -> liftIO $ die "could not find a notify-send executable."
-    Just e -> do
-      logDebugN $ T.pack $ unwords ["Found notify-send executable at:", fromAbsFile e]
-      pure e
 
 findPlay :: (MonadLogger m, MonadIO m) => m (Maybe (Path Abs File))
 findPlay = do

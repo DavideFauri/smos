@@ -1,153 +1,104 @@
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Smos.Scheduler.OptParse
-  ( module Smos.Scheduler.OptParse,
-    module Smos.Scheduler.OptParse.Types,
+  ( Instructions (..),
+    Dispatch (..),
+    Settings (..),
+    getInstructions,
   )
 where
 
-import Data.Maybe
-import Data.Version
-import qualified Env
-import Options.Applicative
-import Options.Applicative.Help.Pretty as Doc
+import Control.Monad.Logger
+import qualified Data.Map as M
+import Data.Validity.Path ()
+import OptEnvConf
 import Path
-import Path.IO
-import Paths_smos_scheduler
+import Paths_smos_scheduler (version)
+import Smos.CLI.Colour
+import Smos.CLI.Logging ()
+import Smos.CLI.OptParse
 import Smos.Data
-import Smos.Query.OptParse (getColourSettings)
-import qualified Smos.Report.Config as Report
-import qualified Smos.Report.OptParse as Report
-import Smos.Scheduler.OptParse.Types
-import qualified System.Environment as System
+import Smos.Directory.OptParse
+import Smos.Scheduler.Schedule
 
 getInstructions :: IO Instructions
-getInstructions = do
-  (Arguments cmd flags) <- getArguments
-  env <- getEnvironment
-  config <- getConfiguration flags env
-  combineToInstructions cmd (Report.flagWithRestFlags flags) (Report.envWithRestEnv env) config
-
-combineToInstructions :: Command -> Flags -> Environment -> Maybe Configuration -> IO Instructions
-combineToInstructions cmd Flags {..} Environment {..} mc = do
-  d <- case cmd of
-    CommandCheck -> pure DispatchCheck
-    CommandNext -> pure DispatchNext
-    CommandSample fp mdpt -> DispatchSample <$> resolveFile' fp <*> mapM (fmap DestinationPathTemplate . parseRelFile) mdpt
-    CommandSchedule -> pure DispatchSchedule
-  setDirectorySettings <-
-    Report.combineToDirectoryConfig
-      Report.defaultDirectoryConfig
-      flagDirectoryFlags
-      envDirectoryEnvironment
-      (confDirectoryConfiguration <$> mc)
-  let setSchedule = fromMaybe (Schedule []) $ cM schedulerConfSchedule
-  let setColourSettings = getColourSettings (mc >>= confColourConfiguration)
-  pure (Instructions d Settings {..})
-  where
-    cM :: (SchedulerConfiguration -> Maybe a) -> Maybe a
-    cM func = mc >>= confSchedulerConfiguration >>= func
-
-getConfiguration :: Report.FlagsWithConfigFile Flags -> Report.EnvWithConfigFile Environment -> IO (Maybe Configuration)
-getConfiguration = Report.getConfiguration
-
-getEnvironment :: IO (Report.EnvWithConfigFile Environment)
-getEnvironment = Env.parse (Env.header "Environment") prefixedEnvironmentParser
-
-prefixedEnvironmentParser :: Env.Parser Env.Error (Report.EnvWithConfigFile Environment)
-prefixedEnvironmentParser = Env.prefixed "SMOS_" environmentParser
-
-environmentParser :: Env.Parser Env.Error (Report.EnvWithConfigFile Environment)
-environmentParser =
-  Report.envWithConfigFileParser $
-    Environment <$> Report.directoryEnvironmentParser
-
-getArguments :: IO Arguments
-getArguments = do
-  args <- System.getArgs
-  let result = runArgumentsParser args
-  handleParseResult result
-
-runArgumentsParser :: [String] -> ParserResult Arguments
-runArgumentsParser = execParserPure prefs_ argumentsParser
-  where
-    prefs_ =
-      defaultPrefs
-        { prefShowHelpOnError = True,
-          prefShowHelpOnEmpty = True
-        }
-
-argumentsParser :: ParserInfo Arguments
-argumentsParser = info (helper <*> parseArguments) help_
-  where
-    help_ = fullDesc <> progDescDoc (Just description)
-    description :: Doc
-    description =
-      Doc.vsep $
-        map Doc.text $
-          [ "",
-            "Smos Scheduler Tool version: " <> showVersion version,
+getInstructions =
+  runSettingsParser version $
+    unlines $
+      concat
+        [ [ "Smos' scheduler tool",
             ""
-          ]
-            ++ writeDataVersionsHelpMessage
+          ],
+          writeDataVersionsHelpMessage
+        ]
 
-parseArguments :: Parser Arguments
-parseArguments = Arguments <$> parseCommand <*> parseFlags
+data Instructions = Instructions !Dispatch !Settings
 
-parseCommand :: Parser Command
-parseCommand =
-  hsubparser $
-    mconcat
-      [ command "check" parseCommandCheck,
-        command "next" parseCommandNext,
-        command "sample" parseCommandSample,
-        command "schedule" parseCommandSchedule
+instance HasParser Instructions where
+  settingsParser =
+    withSmosConfig $
+      Instructions
+        <$> settingsParser
+        <*> settingsParser
+
+data Dispatch
+  = DispatchCheck
+  | DispatchSample !(Path Abs File) !(Maybe DestinationPathTemplate)
+  | DispatchSchedule
+  | DispatchNext
+
+instance HasParser Dispatch where
+  settingsParser =
+    commands
+      [ command "check" "Check that all schedules are valid" $
+          pure DispatchCheck,
+        command "sample" "Produce a sample scheduled project being filled in" $
+          DispatchSample
+            <$> filePathSetting
+              [ help "template to fill in",
+                argument
+              ]
+            <*> optional
+              ( setting
+                  [ help "destination path template. Note that the rendered template will be written here",
+                    reader $ maybeReader $ fmap DestinationPathTemplate . parseRelFile,
+                    option,
+                    long "destination",
+                    metavar "PATH_TEMPLATE"
+                  ]
+              ),
+        command "schedule" "Run the schedules" $
+          pure DispatchSchedule,
+        command "next" "List the next times that scheduled will be activated" $
+          pure DispatchNext
       ]
 
-parseCommandCheck :: ParserInfo Command
-parseCommandCheck = info parser modifier
-  where
-    modifier = fullDesc <> progDesc "Check that all schedules are sensible"
-    parser = pure CommandCheck
+data Settings = Settings
+  { setDirectorySettings :: !DirectorySettings,
+    setLogLevel :: !LogLevel,
+    setSchedule :: !Schedule,
+    setColourSettings :: !ColourSettings
+  }
 
-parseCommandNext :: ParserInfo Command
-parseCommandNext = info parser modifier
-  where
-    modifier = fullDesc <> progDesc "List the next times that scheduled will be activated"
-    parser = pure CommandNext
+instance HasParser Settings where
+  settingsParser = parseSettings
 
-parseCommandSample :: ParserInfo Command
-parseCommandSample = info parser modifier
-  where
-    modifier = fullDesc <> progDesc "Produce a sample scheduled project being filled in"
-    parser =
-      CommandSample
-        <$> strArgument
-          ( mconcat
-              [ help "template to fill in",
-                metavar "FILEPATH",
-                completer $ bashCompleter "file"
-              ]
-          )
-        <*> optional
-          ( strOption
-              ( mconcat
-                  [ long "destination",
-                    help "destination path template. Note that the rendered template will be written here",
-                    metavar "FILEPATH_TEMPLATE",
-                    completer $ bashCompleter "file"
-                  ]
-              )
-          )
-
-parseCommandSchedule :: ParserInfo Command
-parseCommandSchedule = info parser modifier
-  where
-    modifier = fullDesc <> progDesc "Run the schedules"
-    parser = pure CommandSchedule
-
-parseFlags :: Parser (Report.FlagsWithConfigFile Flags)
-parseFlags =
-  Report.parseFlagsWithConfigFile $
-    Flags <$> Report.parseDirectoryFlags
+{-# ANN parseSettings ("NOCOVER" :: String) #-}
+parseSettings :: OptEnvConf.Parser Settings
+parseSettings = do
+  setDirectorySettings <- settingsParser
+  setLogLevel <- settingsParser
+  setColourSettings <- settingsParser
+  let sub = subConfig_ "scheduler" . subEnv_ "scheduler"
+  setSchedule <-
+    sub $
+      Schedule
+        <$> setting
+          [ help "Schedule on which to schedule projects",
+            conf "schedule",
+            value M.empty
+          ]
+  pure Settings {..}

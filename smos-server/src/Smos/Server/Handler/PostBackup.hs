@@ -7,7 +7,6 @@ module Smos.Server.Handler.PostBackup
   )
 where
 
-import Data.Foldable
 import qualified Data.Map as M
 import Smos.Server.Backup
 import Smos.Server.Handler.Import
@@ -25,6 +24,7 @@ servePostBackup ac = withUserId ac $ \uid -> withSubscription ac $ do
         let compressedFile = compressByteString compressionLevel serverFileContents
          in (s + compressedSize compressedFile, M.insert serverFilePath compressedFile cfs)
   let (size, _) = foldl' compressAndCount (0, M.empty) serverFiles
+
   -- Don't let a backup happen if we would be storing more than the server allows
   when (maybe False (sumOfBackupsThatWeAlreadyHave + size >=) maxBackupSize) $ throwError err403 {errBody = "No space for another backup."}
 

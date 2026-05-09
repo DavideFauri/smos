@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Smos.Draw.Base where
 
@@ -11,6 +12,7 @@ import Cursor.TextField
 import Data.List
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Time
+import Data.Time.Zones
 import Path
 import Smos.Data
 import Smos.Report.Projection
@@ -25,8 +27,12 @@ data DrawEnv = DrawEnv
   { drawEnvWaitingThreshold :: !Time,
     drawEnvStuckThreshold :: !Time,
     drawEnvWorkDrawEnv :: !DrawWorkEnv,
-    drawEnvNow :: !ZonedTime
+    drawEnvTimeZone :: !TZ,
+    drawEnvNow :: !UTCTime
   }
+
+drawEnvNowLocal :: DrawEnv -> LocalTime
+drawEnvNowLocal DrawEnv {..} = utcToLocalTimeTZ drawEnvTimeZone drawEnvNow
 
 data DrawWorkEnv = DrawWorkEnv
   { drawWorkEnvProjection :: !(NonEmpty Projection)
@@ -41,7 +47,6 @@ type Drawer' = Reader DrawEnv
 data Select
   = MaybeSelected
   | NotSelected
-  deriving (Show, Eq)
 
 instance Semigroup Select where
   MaybeSelected <> MaybeSelected = MaybeSelected
@@ -127,7 +132,8 @@ drawPropertyPair pn pv =
 drawPropertyName :: PropertyName -> Widget n
 drawPropertyName pn =
   withAttr (propertyNameSpecificAttr pn) $
-    textLineWidget $ propertyNameText pn
+    textLineWidget $
+      propertyNameText pn
 
 drawPropertyValue :: PropertyName -> PropertyValue -> Widget ResourceName
 drawPropertyValue pn = withAttr (propertyNameSpecificAttr pn) . textWidget . propertyValueText
@@ -175,9 +181,8 @@ drawDay d = str $ formatTimestampDay d
 
 drawDayPrettyRelative :: Day -> Drawer
 drawDayPrettyRelative d = do
-  zt <- asks drawEnvNow
-  pure $
-    str $ prettyDayAuto (localDay $ zonedTimeToLocalTime zt) d
+  today <- localDay <$> asks drawEnvNowLocal
+  pure $ str $ prettyDayAuto today d
 
 drawLocalTimeWithPrettyRelative :: LocalTime -> Drawer
 drawLocalTimeWithPrettyRelative lt = do
@@ -195,21 +200,18 @@ drawLocalTime lt = do
 
 drawLocalTimePrettyRelative :: LocalTime -> Drawer
 drawLocalTimePrettyRelative lt = do
-  zt@(ZonedTime _ tz) <- asks drawEnvNow
+  now <- asks drawEnvNow
+  zone <- asks drawEnvTimeZone
   pure $
-    str $ prettyTimeAuto (zonedTimeToUTC zt) $ localTimeToUTC tz lt
+    str $
+      prettyTimeAuto now $
+        localTimeToUTCTZ zone lt
 
 drawTime :: Time -> Widget n
 drawTime = txt . renderTime
 
 drawFilePathInReport :: Path b File -> Widget n
 drawFilePathInReport = drawFilePath
-
-drawFilePathInBrowser :: Path b File -> Widget n
-drawFilePathInBrowser fp =
-  case fileExtension fp of
-    Just ".smos" -> withAttr fileAttr . str . FP.dropExtension . toFilePath $ fp
-    _ -> withAttr nonSmosFileAttr . str . toFilePath $ fp
 
 drawFilePath :: Path b File -> Widget n
 drawFilePath fp =

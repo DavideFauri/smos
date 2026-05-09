@@ -1,12 +1,17 @@
 name: smos-github
-version: 0.5.1
+version: 0.9.0
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
 license: MIT
 
 extra-source-files:
-  - test_resources/**/*
+- documentation.txt
+- options.nix
+- test_resources/**/*
+
+dependencies:
+- base
 
 library:
   source-dirs: src/
@@ -15,20 +20,18 @@ library:
   dependencies:
     - aeson
     - async
-    - autodocodec
-    - base
     - conduit
     - containers
-    - envparse
     - github
     - network-uri
-    - optparse-applicative
+    - opt-env-conf
     - path
     - path-io
+    - safe-coloured-text
     - safe-coloured-text-terminfo
+    - smos-cli
     - smos-data
-    - smos-query
-    - smos-report
+    - smos-directory
     - text
     - time
     - validity
@@ -64,8 +67,10 @@ tests:
     - genvalidity-text
     - genvalidity-time
     - github
+    - opt-env-conf-test
     - path
     - smos-data-gen
     - smos-github
     - sydtest
     - time
+    - validity-path

@@ -1,39 +1,43 @@
 name: smos-query
-version: 0.7.4
+version: 0.12.0
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
 license: MIT
 
+extra-source-files:
+- documentation.txt
+- options.nix
+
 dependencies:
-  base
+- base
 
 library:
   source-dirs: src/
   ghc-options: -Wall
   build-tools: autoexporter
   dependencies:
+  - IntervalMap
   - aeson
   - aeson-pretty
   - bytestring
   - conduit
   - containers
-  - envparse
   - mtl
-  - optparse-applicative
+  - opt-env-conf
   - path
   - pretty-relative-time
   - safe-coloured-text
-  - safe-coloured-text-layout
   - safe-coloured-text-terminfo
+  - smos-directory
+  - smos-cli
   - smos-data
   - smos-report
   - text
   - time
-  - validity
+  - tz
   - validity-path
   - yaml
-  - autodocodec
 
 executables:
   smos-query:
@@ -58,19 +62,10 @@ tests:
     - -with-rtsopts=-N
     - -Wall
     dependencies:
-    - containers
-    - genvalidity
-    - genvalidity-containers
     - genvalidity-sydtest
-    - genvalidity-sydtest-aeson
+    - opt-env-conf-test
     - path
     - path-io
-    - safe-coloured-text
-    - safe-coloured-text-layout
-    - safe-coloured-text-layout-gen
+    - smos-directory-gen
     - smos-query
-    - smos-report
-    - smos-report-gen
     - sydtest
-    - text
-    - yaml

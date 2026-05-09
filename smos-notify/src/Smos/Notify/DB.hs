@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -9,6 +8,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans -Wno-name-shadowing #-}
 
@@ -23,7 +23,6 @@ import Data.Time
 import Database.Persist
 import Database.Persist.Sql
 import Database.Persist.TH
-import GHC.Generics (Generic)
 
 share
   [mkPersist sqlSettings, mkMigrate "notifyMigration"]
@@ -37,5 +36,4 @@ SentNotification
 
     deriving Show
     deriving Eq
-    deriving Generic
 |]

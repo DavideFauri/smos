@@ -2,10 +2,10 @@
 
 module Smos.Report.WaitingSpec where
 
-import Smos.Report.Archive.Gen ()
+import Smos.Directory.Archive.Gen ()
+import Smos.Directory.ShouldPrint
+import Smos.Directory.TestUtils
 import Smos.Report.Filter.Gen ()
-import Smos.Report.ShouldPrint
-import Smos.Report.TestUtils
 import Smos.Report.Waiting
 import Smos.Report.Waiting.Gen ()
 import Test.Syd
@@ -22,9 +22,8 @@ spec = do
   modifyMaxSuccess (`div` 10) $
     describe "produceWaitingReport" $
       it "produces valid reports for interesting stores" $
-        forAllValid $
-          \mFilter ->
-            forAllValid $ \ha ->
-              withInterestingStore $ \dc -> do
-                wr <- produceWaitingReport mFilter ha DontPrint dc
-                shouldBeValid wr
+        forAllValid $ \mFilter ->
+          forAllValid $ \ha ->
+            withInterestingStore $ \dc -> do
+              wr <- produceWaitingReport mFilter ha DontPrint dc
+              shouldBeValid wr

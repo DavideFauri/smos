@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.7.
+-- This file has been generated from package.yaml by hpack version 0.38.3.
 --
 -- see: https://github.com/sol/hpack
 
@@ -47,6 +47,22 @@ extra-source-files:
     content/changelogs/2022-06-27.markdown
     content/changelogs/2022-07-22.markdown
     content/changelogs/2022-08-20.markdown
+    content/changelogs/2022-09-26.markdown
+    content/changelogs/2022-11-11.markdown
+    content/changelogs/2022-11-15.markdown
+    content/changelogs/2023-03-23.markdown
+    content/changelogs/2023-09-12.markdown
+    content/changelogs/2023-11-25.markdown
+    content/changelogs/2024-02-13.markdown
+    content/changelogs/2024-03-26.markdown
+    content/changelogs/2024-05-14.markdown
+    content/changelogs/2024-10-27.markdown
+    content/changelogs/2024-11-29.markdown
+    content/changelogs/2025-01-16.markdown
+    content/changelogs/2025-03-08.markdown
+    content/changelogs/2025-03-27.markdown
+    content/changelogs/2025-05-31.markdown
+    content/changelogs/2026-02-02.markdown
     content/pages/blogposts.markdown
     content/pages/building-installation.markdown
     content/pages/cheat-sheet.markdown
@@ -65,6 +81,7 @@ extra-source-files:
     content/pages/directories.markdown
     content/pages/features.markdown
     content/pages/file-browser.markdown
+    content/pages/installation/download.markdown
     content/pages/installation/nix.markdown
     content/pages/installation/nixos.markdown
     content/pages/installation/stack.markdown
@@ -80,6 +97,9 @@ extra-source-files:
     content/pages/smos-github.markdown
     content/pages/smos-github/import.markdown
     content/pages/smos-github/list.markdown
+    content/pages/smos-jobhunt.markdown
+    content/pages/smos-jobhunt/email.markdown
+    content/pages/smos-jobhunt/init.markdown
     content/pages/smos-notify.markdown
     content/pages/smos-notify/nixos.markdown
     content/pages/smos-query.markdown
@@ -88,8 +108,10 @@ extra-source-files:
     content/pages/smos-query/column.markdown
     content/pages/smos-query/entry.markdown
     content/pages/smos-query/filter.markdown
+    content/pages/smos-query/free.markdown
     content/pages/smos-query/log.markdown
     content/pages/smos-query/next.markdown
+    content/pages/smos-query/ongoing.markdown
     content/pages/smos-query/projects.markdown
     content/pages/smos-query/report.markdown
     content/pages/smos-query/sorter.markdown
@@ -99,19 +121,22 @@ extra-source-files:
     content/pages/smos-query/waiting.markdown
     content/pages/smos-query/work.markdown
     content/pages/smos-scheduler.markdown
+    content/pages/smos-scheduler/check.markdown
+    content/pages/smos-scheduler/next.markdown
     content/pages/smos-scheduler/nixos.markdown
+    content/pages/smos-scheduler/sample.markdown
+    content/pages/smos-scheduler/schedule.markdown
     content/pages/smos-server.markdown
     content/pages/smos-server/backups.markdown
     content/pages/smos-server/nixos.markdown
     content/pages/smos-single.markdown
-    content/pages/smos-sync-client.markdown
-    content/pages/smos-sync-client/database-migration.markdown
-    content/pages/smos-sync-client/nixos.markdown
+    content/pages/smos-sync.markdown
+    content/pages/smos-sync/nixos.markdown
+    content/pages/smos-sync/sync.markdown
     content/pages/smos-web-server.markdown
     content/pages/smos-web-server/nixos.markdown
     content/pages/smos.markdown
     content/pages/support.markdown
-    content/pages/synchronisation.markdown
     content/unreleased.markdown
     templates/args.hamlet
     templates/changelog.hamlet
@@ -128,6 +153,7 @@ extra-source-files:
     templates/nixos-module.hamlet
     templates/option-docs.hamlet
     templates/page.hamlet
+    templates/settings.hamlet
     templates/smos-actions.hamlet
     templates/smos-asciinema/spec.hamlet
     templates/smos-file.hamlet
@@ -136,6 +162,8 @@ extra-source-files:
     templates/smos-query/filter.hamlet
     templates/smos-query/sorter.hamlet
     templates/smos-scheduler/template.hamlet
+    documentation.txt
+    options.nix
 
 source-repository head
   type: git
@@ -146,16 +174,16 @@ library
       Smos.Docs.Site
       Smos.Docs.Site.Application
       Smos.Docs.Site.Assets
-      Smos.Docs.Site.Casts
-      Smos.Docs.Site.Casts.TH
       Smos.Docs.Site.Changelog
       Smos.Docs.Site.Changelog.TH
       Smos.Docs.Site.Constants
+      Smos.Docs.Site.DependencyGraph
       Smos.Docs.Site.Foundation
       Smos.Docs.Site.Handler
       Smos.Docs.Site.Handler.Actions
       Smos.Docs.Site.Handler.Changelog
       Smos.Docs.Site.Handler.CurrentVersions
+      Smos.Docs.Site.Handler.DependencyGraph
       Smos.Docs.Site.Handler.Import
       Smos.Docs.Site.Handler.Keybindings
       Smos.Docs.Site.Handler.Nix
@@ -166,17 +194,17 @@ library
       Smos.Docs.Site.Handler.SmosArchive
       Smos.Docs.Site.Handler.SmosCalendarImport
       Smos.Docs.Site.Handler.SmosGitHub
+      Smos.Docs.Site.Handler.SmosJobHunt
       Smos.Docs.Site.Handler.SmosNotify
       Smos.Docs.Site.Handler.SmosQuery
       Smos.Docs.Site.Handler.SmosScheduler
       Smos.Docs.Site.Handler.SmosServer
       Smos.Docs.Site.Handler.SmosSingle
-      Smos.Docs.Site.Handler.SmosSyncClient
+      Smos.Docs.Site.Handler.SmosSync
       Smos.Docs.Site.Handler.SmosWebServer
       Smos.Docs.Site.ModuleDocs
       Smos.Docs.Site.ModuleDocs.TH
       Smos.Docs.Site.OptParse
-      Smos.Docs.Site.OptParse.Types
       Smos.Docs.Site.Static
       Smos.Docs.Site.Static.TH
       Smos.Docs.Site.Widget
@@ -188,44 +216,48 @@ library
       autoexporter:autoexporter
   build-depends:
       aeson
-    , aeson-pretty
     , autodocodec
     , autodocodec-yaml
-    , base >=4.7
+    , base
     , bytestring
     , cmark-gfm
     , containers
     , data-default
-    , envparse
+    , file-embed
     , filepath
     , fsnotify
-    , optparse-applicative
+    , monad-logger
+    , opt-env-conf
     , path
     , path-io
+    , prometheus
+    , prometheus-ghc-stats
+    , prometheus-wai
     , raw-strings-qq
+    , safe-coloured-text
     , semver
     , shakespeare
     , smos
     , smos-archive
     , smos-calendar-import
+    , smos-cli
     , smos-client
     , smos-data
     , smos-github
+    , smos-jobhunt
     , smos-notify
     , smos-query
     , smos-report
     , smos-scheduler
     , smos-server
     , smos-single
-    , smos-sync-client
+    , smos-sync
+    , smos-web-assets
     , smos-web-server
-    , smos-web-style
     , template-haskell
     , template-haskell-reload
     , text
-    , th-lift-instances
     , time
-    , typed-process
     , wai-extra
     , warp
     , yaml
@@ -242,8 +274,26 @@ executable smos-docs-site
       Paths_smos_docs_site
   hs-source-dirs:
       app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -with-rtsopts=-Iw60 -with-rtsopts=--nonmoving-gc -with-rtsopts=-T
   build-depends:
-      base >=4.7 && <5
+      base
     , smos-docs-site
+  default-language: Haskell2010
+
+test-suite smos-docs-site-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Smos.Docs.Site.OptParseSpec
+      Paths_smos_docs_site
+  hs-source-dirs:
+      test/
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
+  build-tool-depends:
+      sydtest-discover:sydtest-discover
+  build-depends:
+      base
+    , opt-env-conf-test
+    , smos-docs-site
+    , sydtest
   default-language: Haskell2010

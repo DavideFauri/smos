@@ -5,12 +5,14 @@
 module Smos.Server.Handler.Import
   ( module X,
     withUserId,
+    withUsernameId,
     streamSmosFiles,
     asAdmin,
   )
 where
 
 import Conduit
+import Control.Monad as X
 import Control.Monad.Except as X
 import Control.Monad.Logger as X
 import Control.Monad.Reader as X
@@ -19,38 +21,42 @@ import Data.Text as X (Text)
 import qualified Data.Text as T
 import Data.Time as X
 import Data.UUID.Typed as X
+import Database.Persist.Pagination
 import Path as X
 import Path.IO as X hiding (getPermissions)
 import Servant.API as X hiding (Unique)
 import Servant.Server as X
 import Smos.API as X hiding (Unique)
 import Smos.Data hiding (parseHeader)
-import Smos.Report.Archive as X
+import Smos.Directory.Archive as X
 import Smos.Server.Constants as X
 import Smos.Server.DB as X
 import Smos.Server.Env as X
-import Smos.Server.OptParse.Types as X
+import Smos.Server.OptParse as X
 import Text.Show.Pretty as X
 
 withUserId :: AuthNCookie -> (UserId -> ServerHandler a) -> ServerHandler a
-withUserId AuthNCookie {..} func = do
-  mu <- runDB $ getBy $ UniqueUsername authNCookieUsername
+withUserId = withUsernameId . authNCookieUsername
+
+withUsernameId :: Username -> (UserId -> ServerHandler a) -> ServerHandler a
+withUsernameId username func = do
+  mu <- runDB $ getBy $ UniqueUsername username
   case mu of
     Nothing -> throwError err404
     Just (Entity uid _) -> do
-      logInfoN $ T.unwords ["Succesfully authenticated user", T.pack (show (usernameText authNCookieUsername))]
+      logInfoN $ T.unwords ["Succesfully authenticated user", T.pack (show (usernameText username))]
       now <- liftIO getCurrentTime
       runDB $ update uid [UserLastUse =. Just now]
       func uid
 
-streamSmosFiles :: UserId -> HideArchive -> ConduitT (Path Rel File, SmosFile) Void IO r -> ServerHandler r
-streamSmosFiles uid ha conduit = do
-  acqSource <- runDB $ selectSourceRes [ServerFileUser ==. uid] []
-  liftIO $
-    withAcquire acqSource $ \source ->
-      runConduit $ source .| parseServerFileC ha .| conduit
+streamSmosFiles :: UserId -> HideArchive -> ConduitT (Path Rel File, SmosFile) Void ServerHandler r -> ServerHandler r
+streamSmosFiles uid ha conduit =
+  runConduit $
+    runDBConduit (streamEntities [ServerFileUser ==. uid] ServerFileId (PageSize 256) Ascend (Range Nothing Nothing))
+      .| parseServerFileC ha
+      .| conduit
 
-parseServerFileC :: Monad m => HideArchive -> ConduitT (Entity ServerFile) (Path Rel File, SmosFile) m ()
+parseServerFileC :: (Monad m) => HideArchive -> ConduitT (Entity ServerFile) (Path Rel File, SmosFile) m ()
 parseServerFileC ha = C.concatMap $ \(Entity _ ServerFile {..}) ->
   let filePred = case ha of
         HideArchive -> not . isProperPrefixOf [reldir|archive|]

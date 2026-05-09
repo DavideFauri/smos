@@ -2,12 +2,13 @@
 
 module Smos.Actions.Report.Stuck where
 
-import Data.Time
+import Data.Time.Zones
 import Path
 import Smos.Actions.File
 import Smos.Actions.Utils
-import Smos.Report.Config
-import Smos.Report.ShouldPrint
+import Smos.Directory.Resolution
+import Smos.Directory.ShouldPrint
+import Smos.Report.OptParse
 import Smos.Types
 
 allPlainReportStuckActions :: [Action]
@@ -30,9 +31,9 @@ reportStuck =
     { actionName = "reportStuck",
       actionFunc = modifyEditorCursorS $ \ec -> do
         saveCurrentSmosFile
-        dc <- asks $ smosReportConfigDirectoryConfig . configReportConfig
-        now <- liftIO getZonedTime
-        narc <- liftIO $ produceStuckReportCursor (zonedTimeZone now) DontPrint dc
+        dc <- asks $ reportSettingDirectorySettings . configReportSettings
+        zone <- liftIO loadLocalTZ
+        narc <- liftIO $ produceStuckReportCursor zone DontPrint dc
         pure $
           ec
             { editorCursorSelection = ReportSelected,
@@ -82,7 +83,7 @@ enterStuckFile =
         case editorCursorReportCursor $ smosStateCursor ss of
           Just rc -> case rc of
             ReportStuck src -> do
-              dc <- asks $ smosReportConfigDirectoryConfig . configReportConfig
+              dc <- asks $ reportSettingDirectorySettings . configReportSettings
               pd <- liftIO $ resolveDirProjectsDir dc
               case stuckReportCursorSelectedFile src of
                 Nothing -> pure ()

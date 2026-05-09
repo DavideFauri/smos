@@ -11,8 +11,9 @@ defaultConfig :: SmosConfig
 defaultConfig =
   SmosConfig
     { configKeyMap = defaultKeyMap,
-      configReportConfig = defaultReportConfig,
-      configExplainerMode = True
+      configReportSettings = defaultReportSettings,
+      configExplainerMode = True,
+      configSandboxMode = False
     }
 
 defaultKeyMap :: KeyMap
@@ -107,17 +108,19 @@ defaultFileKeyMap =
             exactString "gp" $ tagsToggle "power",
             exactString "gc" $ tagsToggle "code",
             -- Fast timestamps manipulation
+            exactString "sa" $ timestampsSelect "AFTER",
             exactString "sb" $ timestampsSelect "BEGIN",
-            exactString "se" $ timestampsSelect "END",
             exactString "sd" $ timestampsSelect "DEADLINE",
+            exactString "se" $ timestampsSelect "END",
             exactString "ss" $ timestampsSelect "SCHEDULED",
             exactString "pi" entrySelectProperties,
             exactString "pa" $ propertiesEditProperty "assignee",
             exactString "pb" $ propertiesEditProperty "brainpower",
             exactString "pc" $ propertiesEditProperty "client",
-            exactString "pe" $ propertiesEditProperty "estimate",
-            exactString "pt" $ propertiesEditProperty "timewindow",
+            exactString "pe" $ propertiesEditProperty "email_address",
             exactString "pg" $ propertiesEditProperty "goal",
+            exactString "pp" $ propertiesEditProperty "phone_number",
+            exactString "pt" $ propertiesEditProperty "timewindow",
             exactString "pu" $ propertiesEditProperty "url",
             exactString "pw" $ propertiesEditProperty "waiting_threshold",
             -- Clocking
@@ -147,6 +150,8 @@ defaultFileKeyMap =
             exactKey KEnter entrySelectContentsAtEnd,
             exactKeyPress (KeyPress KEnter [MMeta]) entrySelectContentsAtStart,
             exactKeyPress (KeyPress (KChar 'o') [MMeta]) entrySelectContentsAtStart,
+            exactString "cv" contentsUseVim,
+            exactString "ce" contentsUseEditor,
             -- Entering tags
             exactString "gi" entrySelectTagsFromStart,
             exactString "ga" entrySelectTagsFromBack
@@ -305,6 +310,7 @@ defaultReportsKeyMap =
   ReportsKeyMap
     { reportsKeymapNextActionReportKeyMap = defaultNextActionReportKeyMap,
       reportsKeymapWaitingReportKeyMap = defaultWaitingReportKeyMap,
+      reportsKeymapOngoingReportKeyMap = defaultOngoingReportKeyMap,
       reportsKeymapTimestampsReportKeyMap = defaultTimestampsReportKeyMap,
       reportsKeymapStuckReportKeyMap = defaultStuckReportKeyMap,
       reportsKeymapWorkReportKeyMap = defaultWorkReportKeyMap,
@@ -367,6 +373,33 @@ defaultWaitingReportKeyMap =
             exactKey KDel deleteWaitingFilter
           ],
       waitingReportAnyMatchers = listMatchers []
+    }
+
+defaultOngoingReportKeyMap :: OngoingReportKeyMap
+defaultOngoingReportKeyMap =
+  OngoingReportKeyMap
+    { ongoingReportMatchers =
+        listMatchers
+          [ exactKey KUp prevOngoing,
+            exactChar 'k' prevOngoing,
+            exactKey KDown nextOngoing,
+            exactChar 'j' nextOngoing,
+            exactKey KHome firstOngoing,
+            exactString "gg" firstOngoing,
+            exactKey KEnd lastOngoing,
+            exactChar 'G' lastOngoing,
+            exactKey KEnter enterOngoingFile,
+            exactChar '/' selectOngoingFilter
+          ],
+      ongoingReportSearchMatchers =
+        listMatchers
+          [ anyChar insertOngoingFilter,
+            exactKey KEnter selectOngoingReport,
+            exactKey KEsc selectOngoingReport,
+            exactKey KBS removeOngoingFilter,
+            exactKey KDel deleteOngoingFilter
+          ],
+      ongoingReportAnyMatchers = listMatchers []
     }
 
 defaultTimestampsReportKeyMap :: TimestampsReportKeyMap
@@ -489,6 +522,7 @@ defaultAnyKeyMap =
       -- Reports
       exactString "rn" reportNextActions,
       exactString "rw" reportWaiting,
+      exactString "ro" reportOngoing,
       exactString "ra" reportTimestamps,
       exactString "rs" reportStuck,
       exactString "rr" reportWork

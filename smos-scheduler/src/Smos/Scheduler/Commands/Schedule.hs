@@ -1,86 +1,131 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Smos.Scheduler.Commands.Schedule
   ( schedule,
+    scheduleAsIfAt,
+    handleScheduleItem,
+    ScheduleItemResult (..),
   )
 where
 
+import Control.Monad.IO.Class
+import Control.Monad.Logger
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
+import qualified Data.Map as M
+import Data.Maybe
+import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Time
+import Data.Time.Zones
 import Path
 import Path.IO
+import Smos.CLI.Logging
 import Smos.Data
-import Smos.Report.Config as Report
+import Smos.Directory.OptParse
+import Smos.Directory.Resolution
+import Smos.Scheduler.History
 import Smos.Scheduler.OptParse
 import Smos.Scheduler.Recurrence
 import Smos.Scheduler.Render
-import Smos.Scheduler.Utils
+import Smos.Scheduler.Schedule
 
 schedule :: Settings -> IO ()
-schedule Settings {..} = do
-  now <- getZonedTime
-  rh <- readReccurrenceHistory setDirectorySettings
+schedule settings = do
+  now <- getCurrentTime
+  scheduleAsIfAt now settings
+
+scheduleAsIfAt :: UTCTime -> Settings -> IO ()
+scheduleAsIfAt now Settings {..} = runFilteredLogger setLogLevel $ do
+  rh <- liftIO $ readReccurrenceHistory setDirectorySettings
   handleSchedule setDirectorySettings rh now setSchedule
 
-handleSchedule :: DirectoryConfig -> RecurrenceHistory -> ZonedTime -> Schedule -> IO ()
-handleSchedule dc rh now sched =
-  mapM_ (handleScheduleItem dc rh now) (scheduleItems sched)
+handleSchedule :: DirectorySettings -> RecurrenceHistory -> UTCTime -> Schedule -> LoggingT IO ()
+handleSchedule dc rh now sched = do
+  zone <- liftIO loadLocalTZ
+  let nowLocal = utcToLocalTimeTZ zone now
+  mapM_ (uncurry (handleScheduleItem dc rh nowLocal)) (M.toList (scheduleItems sched))
 
-handleScheduleItem :: DirectoryConfig -> RecurrenceHistory -> ZonedTime -> ScheduleItem -> IO (Maybe UTCTime)
-handleScheduleItem dc rh now si = do
-  case computeNextRun rh (zonedTimeToUTC now) si of
-    Nothing -> do
-      putStrLn $
-        unwords
-          [ "Not activating",
-            scheduleItemDisplayName si,
-            "because",
-            case scheduleItemRecurrence si of
-              RentRecurrence _ -> "it will never be activated again."
-              HaircutRecurrence _ -> "it is still in progress."
-          ]
-      pure Nothing
-    Just timeToActivate ->
-      if timeToActivate > zonedTimeToUTC now
-        then do
-          putStrLn $
+handleScheduleItem ::
+  DirectorySettings ->
+  RecurrenceHistory ->
+  LocalTime ->
+  ScheduleItemName ->
+  ScheduleItem ->
+  LoggingT IO (Maybe LocalTime)
+handleScheduleItem dc rh nowLocal sn si = do
+  let activateImmediately = activateAsIfAt nowLocal
+      displayName =
+        show @Text $
+          fromMaybe
+            (propertyValueText sn)
+            (scheduleItemDescription si)
+      activateAsIfAt :: LocalTime -> LoggingT IO (Maybe LocalTime)
+      activateAsIfAt time = do
+        r <- liftIO $ performScheduleItem dc time sn si
+        logResult displayName r
+        case r of
+          ScheduleItemResultSuccess -> pure $ Just time
+          _ -> pure Nothing
+  case computeNextRun nowLocal rh sn si of
+    Left hnr -> case hnr of
+      DoNotActivateHaircut -> do
+        logInfoN $
+          T.pack $
             unwords
               [ "Not activating",
-                scheduleItemDisplayName si,
-                "because it should not be activated before",
-                show timeToActivate
+                displayName,
+                "because it is still in progress."
               ]
-          pure Nothing
-        else do
-          r <- performScheduleItem dc (utcToZonedTime (zonedTimeZone now) timeToActivate) si
-          case scheduleItemResultMessage r of
-            Nothing -> do
-              putStrLn $
+        pure Nothing
+      ActivateHaircutImmediately -> activateImmediately
+      ActivateHaircutNoSoonerThan timeToActivate ->
+        if timeToActivate > nowLocal
+          then do
+            logInfoN $
+              T.pack $
                 unwords
-                  [ "Succesfully activated",
-                    scheduleItemDisplayName si
+                  [ "Not activating",
+                    displayName,
+                    "because it should not be activated before",
+                    show timeToActivate
                   ]
-              pure $ Just timeToActivate
-            Just msg -> do
-              putStrLn msg
-              pure Nothing
+            pure Nothing
+          else activateImmediately
+    Right rnr -> case rnr of
+      DoNotActivateRent -> do
+        logInfoN $
+          T.pack $
+            unwords
+              [ "Not activating",
+                displayName,
+                "because it will never be activated (again)."
+              ]
+        pure Nothing
+      ActivateRentImmediatelyAsIfAt next -> activateAsIfAt next
+      ActivateRentNoSoonerThan timeToActivate ->
+        if timeToActivate > nowLocal
+          then do
+            logInfoN $
+              T.pack $
+                unwords
+                  [ "Not activating",
+                    displayName,
+                    "because it should not be activated before",
+                    show timeToActivate
+                  ]
+            pure Nothing
+          else activateAsIfAt timeToActivate
 
-scheduleItemDisplayName :: ScheduleItem -> String
-scheduleItemDisplayName si@ScheduleItem {..} =
-  maybe
-    (unwords ["the item with schedule", show scheduleItemRecurrence, "and hash", show (hashScheduleItem si)])
-    show
-    scheduleItemDescription
-
-performScheduleItem :: DirectoryConfig -> ZonedTime -> ScheduleItem -> IO ScheduleItemResult
-performScheduleItem dc now si@ScheduleItem {..} = do
-  wdir <- Report.resolveDirWorkflowDir dc
-  let from = wdir </> scheduleItemTemplate
-  let ctx = RenderContext {renderContextTime = now}
-  case runRender ctx $ renderDestinationPathTemplate scheduleItemDestination of
+performScheduleItem :: DirectorySettings -> LocalTime -> ScheduleItemName -> ScheduleItem -> IO ScheduleItemResult
+performScheduleItem dc pretendTime sn ScheduleItem {..} = do
+  wdir <- resolveDirWorkflowDir dc
+  from <- resolveFile wdir $ T.unpack scheduleItemTemplateFile
+  errOrRendered <- runRenderAsIfAt pretendTime $ renderDestinationPathTemplate scheduleItemDestination
+  case errOrRendered of
     Left errs -> pure $ ScheduleItemResultPathRenderError errs
     Right destination -> do
       let to = wdir </> destination
@@ -89,47 +134,64 @@ performScheduleItem dc now si@ScheduleItem {..} = do
         Nothing -> pure $ ScheduleItemResultTemplateDoesNotExist from
         Just (Left err) -> pure $ ScheduleItemResultYamlParseError from err
         Just (Right template) -> do
-          let errOrRendered = runRender ctx $ renderTemplate template
-          case errOrRendered of
+          errOrRendered' <- runRenderAsIfAt pretendTime $ renderTemplate template
+          case errOrRendered' of
             Left errs -> pure $ ScheduleItemResultFileRenderError errs
             Right rendered -> do
               destinationExists <- doesFileExist to
               if destinationExists
                 then pure $ ScheduleItemResultDestinationAlreadyExists to
                 else do
-                  let renderedWithMetadata = addScheduleHashMetadata (hashScheduleItem si) rendered
+                  let renderedWithMetadata = addScheduleMetadata pretendTime sn rendered
                   ensureDir $ parent to
                   writeSmosFile to renderedWithMetadata
                   pure ScheduleItemResultSuccess
 
 data ScheduleItemResult
-  = ScheduleItemResultPathRenderError (NonEmpty RenderError)
-  | ScheduleItemResultTemplateDoesNotExist (Path Abs File)
-  | ScheduleItemResultYamlParseError (Path Abs File) String
-  | ScheduleItemResultFileRenderError (NonEmpty RenderError)
-  | ScheduleItemResultDestinationAlreadyExists (Path Abs File)
+  = ScheduleItemResultPathRenderError !(NonEmpty RenderError)
+  | ScheduleItemResultTemplateDoesNotExist !(Path Abs File)
+  | ScheduleItemResultYamlParseError !(Path Abs File) !String
+  | ScheduleItemResultFileRenderError !(NonEmpty RenderError)
+  | ScheduleItemResultDestinationAlreadyExists !(Path Abs File)
   | ScheduleItemResultSuccess
 
-scheduleItemResultMessage :: ScheduleItemResult -> Maybe String
-scheduleItemResultMessage = \case
-  ScheduleItemResultSuccess -> Nothing
+logResult :: String -> ScheduleItemResult -> LoggingT IO ()
+logResult displayName = \case
+  ScheduleItemResultSuccess ->
+    logInfoN $
+      T.pack $
+        unwords
+          [ "Succesfully activated",
+            displayName
+          ]
   ScheduleItemResultPathRenderError errs ->
-    Just $
-      unlines $
-        "ERROR: Validation errors while rendering template destination file name:" :
-        map prettyRenderError (NE.toList errs)
+    logErrorN $
+      T.pack $
+        unlines $
+          "Validation errors while rendering template destination file name:"
+            : map prettyRenderError (NE.toList errs)
   ScheduleItemResultTemplateDoesNotExist from ->
-    Just $ unwords ["ERROR: template does not exist:", fromAbsFile from]
+    logErrorN $
+      T.pack $
+        unwords ["template does not exist:", fromAbsFile from]
   ScheduleItemResultYamlParseError from err ->
-    Just $
-      unlines
-        [ unwords ["ERROR: Does not look like a smos template file:", fromAbsFile from],
-          err
-        ]
+    logErrorN $
+      T.pack $
+        unlines
+          [ unwords ["Does not look like a smos template file:", fromAbsFile from],
+            err
+          ]
   ScheduleItemResultFileRenderError errs ->
-    Just $
-      unlines $
-        "ERROR: Validation errors while rendering template:" :
-        map prettyRenderError (NE.toList errs)
+    logErrorN $
+      T.pack $
+        unlines $
+          "Validation errors while rendering template:"
+            : map prettyRenderError (NE.toList errs)
   ScheduleItemResultDestinationAlreadyExists to ->
-    Just $ unwords ["WARNING: destination already exists:", fromAbsFile to, " not overwriting."]
+    logWarnN $
+      T.pack $
+        unwords
+          [ "WARNING: destination already exists:",
+            fromAbsFile to,
+            " not overwriting."
+          ]

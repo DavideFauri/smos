@@ -1,0 +1,49 @@
+<section .section>
+  <div .container>
+    <div .box>
+      <h3 .title .is-3>
+        Booking
+
+      <div .content>
+        $if showBookingPage
+          $maybe bookingSettings <- mBookingSettings
+            <p>
+              Bookings have been activated with the following booking settings:
+            <pre>
+              #{TE.decodeLatin1 $ Yaml.toByteString bookingSettings}
+
+            <p>
+              You can share this link with people to let them book you:
+            <p>
+              <a href=@{BookUserR username}>
+                @{BookUserR username}
+
+            <p>
+              When someone books you, both you and them get an email with an invitation.
+              They will automatically marked as "Going" but you need to RSVP "Yes" in order to confirm the meeting.
+
+            <p>
+              Note that the meeting may not be added to your calendar automatically, so make sure to check that yourself.
+
+          $nothing
+            <p>
+              You have not configured booking.
+              See the reference section below for instructions on how to activate bookings.
+
+          <h4 .title .is-4>
+            Reference
+            
+          <p>
+            You can configure booking by adding a
+            <code>
+              #{fromRelFile bookingFilePath}
+            configuration file to your workflow directory.
+
+          <pre>
+            #{bookingSettingsSchema}
+
+        $else
+          <p>
+            Bookings are a subscription feature.
+          <p>
+            Subscribe to use bookings.

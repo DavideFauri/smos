@@ -24,7 +24,8 @@ where
 
 import Control.DeepSeq
 import Control.Exception
-import Control.Monad.IO.Class
+import Control.Monad.Except
+import Control.Monad.Reader
 import Data.ByteString (ByteString)
 import Data.DirForest (DirForest)
 import Data.List (find)
@@ -32,7 +33,9 @@ import Data.SemVer as Version
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time
+import Data.Word
 import GHC.Generics
+import qualified ICal
 import Lens.Micro
 import qualified Network.HTTP.Types as HTTP
 import Path
@@ -67,12 +70,34 @@ clientPostRegister = postRegister smosUnprotectedClient
 clientPostLogin :: Login -> ClientM (Headers '[Header "Set-Cookie" T.Text] NoContent)
 clientPostLogin = postLogin smosUnprotectedClient
 
+-- | Get booking settings, fail when booking is not configured or the user does not exist.
+clientGetBookingSettings :: Username -> ClientM BookingSettings
+clientGetBookingSettings = getBookingSettings smosUnprotectedClient
+
+-- | Get booking settings, 'Nothing' when booking is not configured or the user does not exist.
+clientGetBookingSettingsMaybe :: Username -> ClientM (Maybe BookingSettings)
+clientGetBookingSettingsMaybe username =
+  (Just <$> clientGetBookingSettings username)
+    `catchError` ( \err -> case err of
+                     FailureResponse _ response ->
+                       if responseStatusCode response == HTTP.notFound404
+                         then pure Nothing
+                         else throwError err
+                     _ -> throwError err
+                 )
+
+clientGetBookingSlots :: Username -> Word8 -> ClientM BookingSlots
+clientGetBookingSlots = getBookingSlots smosUnprotectedClient
+
+clientPostBooking :: Username -> Booking -> ClientM ICal.ICalendar
+clientPostBooking = postBooking smosUnprotectedClient
+
 oldestSupportedAPIVersion :: Version
 oldestSupportedAPIVersion = version 0 0 0 [] []
 
 -- | Update this to a newer version than the current to build in forward-compatibility
 newestSupportedAPIVersion :: Version
-newestSupportedAPIVersion = version 0 3 0 [] []
+newestSupportedAPIVersion = version 0 4 0 [] []
 
 clientVersionCheck :: ClientM (Version, VersionCheck)
 clientVersionCheck = do
@@ -85,41 +110,15 @@ clientVersionCheck = do
         serverVersion
     )
 
-clientDoVersionCheck :: ClientM (Either String ())
-clientDoVersionCheck = do
-  (serverVersion, check) <- clientVersionCheck
-  pure $ case check of
-    OlderThanSupported ->
-      Left $
-        unlines $
-          [ "The server API version is older than this client supports.",
-            "Interacting with this version is no longer supported in this version of your client.",
-            "Downgrade your client or upgrade your server to interact with it.",
-            ""
-          ]
-            ++ versionsErrorHelp oldestSupportedAPIVersion serverVersion newestSupportedAPIVersion
-    NewerThanSupported ->
-      Left $
-        unlines $
-          [ "The server API version is newer than this client supports.",
-            "Interacting with this version is not supported in this version of your client yet.",
-            "Upgrade your client or downgrade your server to interact with it.",
-            ""
-          ]
-            ++ versionsErrorHelp oldestSupportedAPIVersion serverVersion newestSupportedAPIVersion
-    Supported -> Right ()
-
 clientWithVersionCheck :: ClientM a -> ClientM a
 clientWithVersionCheck func = do
-  errOrUnit <- clientDoVersionCheck
-  case errOrUnit of
-    Left err -> liftIO $ die err
-    Right () -> func
+  clientEnv <- ask
+  withClientVersionCheck clientEnv func
 
-withClientVersionCheck :: MonadIO m => ClientEnv -> m a -> m a
+withClientVersionCheck :: (MonadIO m) => ClientEnv -> m a -> m a
 withClientVersionCheck cenv func = do
-  errOrUnit <- liftIO $ runClientM clientDoVersionCheck cenv
-  case errOrUnit of
+  errOrTup <- liftIO $ runClientM clientVersionCheck cenv
+  case errOrTup of
     Left err ->
       let errOut = liftIO $
             die $
@@ -149,8 +148,32 @@ withClientVersionCheck cenv func = do
                     else errOut
                 else errOut
             _ -> errOut
-    Right (Left err) -> liftIO $ die err
-    Right (Right ()) -> func
+    Right (serverVersion, check) ->
+      case check of
+        OlderThanSupportedMajor ->
+          liftIO $
+            die $
+              unlines $
+                [ "The server API version is older than this client supports.",
+                  "Interacting with this version is no longer supported in this version of your client.",
+                  "Downgrade your client or upgrade your server to interact with it.",
+                  ""
+                ]
+                  ++ versionsErrorHelp oldestSupportedAPIVersion serverVersion newestSupportedAPIVersion
+        -- MAYBE Allow showing warnings when a minor version is too old or new
+        OlderThanSupportedMinor -> func
+        Supported -> func
+        NewerThanSupportedMinor -> func
+        NewerThanSupportedMajor ->
+          liftIO $
+            die $
+              unlines $
+                [ "The server API version is newer than this client supports.",
+                  "Interacting with this version is not supported in this version of your client yet.",
+                  "Upgrade your client or downgrade your server to interact with it.",
+                  ""
+                ]
+                  ++ versionsErrorHelp oldestSupportedAPIVersion serverVersion newestSupportedAPIVersion
 
 clientVersionsHelpMessage :: [String]
 clientVersionsHelpMessage =
@@ -199,6 +222,9 @@ clientGetSmosFile = getSmosFile smosProtectedClient
 
 clientPutSmosFile :: Token -> Path Rel File -> SmosFile -> ClientM NoContent
 clientPutSmosFile = putSmosFile smosProtectedClient
+
+clientDeleteSmosFile :: Token -> Path Rel File -> ClientM NoContent
+clientDeleteSmosFile = deleteSmosFile smosProtectedClient
 
 smosReportsClient :: ReportRoutes (AsClientT ClientM)
 smosReportsClient = fromServant $ reportRoutes smosProtectedClient
@@ -272,7 +298,7 @@ data LoginError
   | LoginHeaderProblem HeaderProblem
   deriving (Show, Eq, Generic)
 
-runClient :: NFData a => ClientEnv -> ClientM a -> IO (Either ClientError a)
+runClient :: (NFData a) => ClientEnv -> ClientM a -> IO (Either ClientError a)
 runClient = flip runClientM
 
 runClientOrDie :: ClientEnv -> ClientM a -> IO a

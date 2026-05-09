@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-unused-pattern-binds #-}
 
 module Smos.Web.Server.Handler.Admin
   ( getAdminPanelR,
@@ -10,6 +11,8 @@ module Smos.Web.Server.Handler.Admin
   )
 where
 
+import qualified Data.Text.Encoding as TE
+import qualified Data.Yaml.Builder as Yaml
 import Smos.Web.Server.Handler.Import
 
 getAdminPanelR :: Handler Html
@@ -27,6 +30,7 @@ postAdminMigrateFilesR = withAdminLogin $ \t -> do
 getAdminUserR :: Username -> Handler Html
 getAdminUserR username = withAdminLogin $ \t -> do
   user <- runClientOrErr $ clientGetUser t username
+  mBookingSettings <- runClientOrErr $ clientGetBookingSettingsMaybe username
   now <- liftIO getCurrentTime
   token <- genToken
   withNavBar $(widgetFile "admin/user")

@@ -6,14 +6,16 @@ module Smos.Actions.Report.Work where
 import Cursor.Map
 import Cursor.Simple.List.NonEmpty
 import Data.Time
+import Data.Time.Zones
 import Lens.Micro
 import Path
 import Smos.Actions.File
 import Smos.Actions.Utils
 import Smos.Cursor.Report.Entry
-import Smos.Report.Archive
-import Smos.Report.Config
-import Smos.Report.ShouldPrint
+import Smos.Directory.Archive
+import Smos.Directory.Resolution
+import Smos.Directory.ShouldPrint
+import Smos.Report.OptParse
 import Smos.Report.Work
 import Smos.Types
 
@@ -43,34 +45,39 @@ reportWork =
     { actionName = "reportWork",
       actionFunc = modifyEditorCursorS $ \ec -> do
         saveCurrentSmosFile
-        src <- asks configReportConfig
-        now <- liftIO getZonedTime
-        wd <- liftIO $ resolveReportWorkflowDir src
-        pd <- liftIO $ resolveReportProjectsDir src
+        src <- asks configReportSettings
+        let ds = reportSettingDirectorySettings src
+        zone <- liftIO loadLocalTZ
+        now <- liftIO getCurrentTime
+        wd <- liftIO $ resolveDirWorkflowDir ds
+        pd <- liftIO $ resolveDirProjectsDir ds
         let mpd = stripProperPrefix wd pd
-        let dc = smosReportConfigDirectoryConfig src
-        let wc = smosReportConfigWorkConfig src
-        let wac = smosReportConfigWaitingConfig src
-        let sc = smosReportConfigStuckConfig src
+        let wc = reportSettingWorkSettings src
+        let wac = reportSettingWaitingSettings src
+        let sc = reportSettingStuckSettings src
         let ctx =
               WorkReportContext
-                { workReportContextNow = now,
+                { workReportContextTimeZone = zone,
+                  workReportContextNow = now,
                   workReportContextProjectsSubdir = mpd,
-                  workReportContextBaseFilter = workReportConfigBaseFilter wc,
+                  workReportContextBaseFilter = workReportSettingBaseFilter wc,
                   workReportContextCurrentContext = Nothing,
-                  workReportContextTimeProperty = workReportConfigTimeProperty wc,
+                  workReportContextTimeProperty = workReportSettingTimeProperty wc,
                   workReportContextTime = Nothing,
                   workReportContextAdditionalFilter = Nothing,
-                  workReportContextContexts = workReportConfigContexts wc,
-                  workReportContextChecks = workReportConfigChecks wc,
-                  workReportContextSorter = workReportConfigSorter wc,
-                  workReportContextWaitingThreshold = waitingReportConfigThreshold wac,
-                  workReportContextStuckThreshold = stuckReportConfigThreshold sc
+                  workReportContextContexts = workReportSettingContexts wc,
+                  workReportContextChecks = workReportSettingChecks wc,
+                  workReportContextSorter = workReportSettingSorter wc,
+                  workReportContextWaitingThreshold = waitingReportSettingThreshold wac,
+                  workReportContextStuckThreshold = stuckReportSettingThreshold sc
                 }
 
-        wrc <- liftIO $ produceWorkReportCursor HideArchive DontPrint dc ctx
+        wrc <- liftIO $ produceWorkReportCursor HideArchive DontPrint ds ctx
         -- If there are no contexts, we don't care about the entries without context
-        let wrc' = if null (workReportConfigContexts wc) then wrc {workReportCursorEntriesWithoutContext = emptyEntryReportCursor} else wrc
+        let wrc' =
+              if null (workReportSettingContexts wc)
+                then wrc {workReportCursorEntriesWithoutContext = emptyEntryReportCursor}
+                else wrc
         pure $
           ec
             { editorCursorSelection = ReportSelected,
@@ -120,7 +127,7 @@ enterWorkFile =
         case editorCursorReportCursor $ smosStateCursor ss of
           Just rc -> case rc of
             ReportWork wrc -> do
-              dc <- asks $ smosReportConfigDirectoryConfig . configReportConfig
+              dc <- asks $ reportSettingDirectorySettings . configReportSettings
               wd <- liftIO $ resolveDirWorkflowDir dc
               let switchToEntryReportEntryCursor ad EntryReportEntryCursor {..} = switchToCursor (ad </> entryReportEntryCursorFilePath) $ Just $ makeSmosFileCursorFromSimpleForestCursor entryReportEntryCursorForestCursor
                   switchToSelectedInEntryReportCursor ad erc =
@@ -128,9 +135,10 @@ enterWorkFile =
                       Nothing -> pure ()
                       Just (afp, sfc) -> switchToCursor afp $ Just sfc
               case workReportCursorSelection wrc of
-                NextBeginSelected -> case workReportCursorNextBeginCursor wrc of
-                  Nothing -> pure ()
-                  Just erc -> switchToEntryReportEntryCursor wd erc
+                NextBeginSelected ->
+                  mapM_
+                    (switchToEntryReportEntryCursor wd)
+                    (workReportCursorNextBeginCursor wrc)
                 WithoutContextSelected -> switchToSelectedInEntryReportCursor wd (workReportCursorEntriesWithoutContext wrc)
                 CheckViolationsSelected -> case workReportCursorCheckViolations wrc of
                   Nothing -> pure ()
@@ -139,6 +147,7 @@ enterWorkFile =
                         erc = foldKeyValueCursor (\_ x -> x) (\_ x -> x) kvc
                      in switchToSelectedInEntryReportCursor wd erc
                 DeadlinesSelected -> switchToSelectedInEntryReportCursor wd (timestampsReportCursorEntryReportCursor (workReportCursorDeadlinesCursor wrc))
+                OngoingSelected -> switchToSelectedInEntryReportCursor wd (ongoingReportCursorEntryReportCursor (workReportCursorOngoingEntries wrc))
                 WaitingSelected -> switchToSelectedInEntryReportCursor wd (waitingReportCursorEntryReportCursor (workReportCursorOverdueWaiting wrc))
                 StuckSelected -> case stuckReportCursorSelectedFile (workReportCursorOverdueStuck wrc) of
                   Nothing -> pure ()

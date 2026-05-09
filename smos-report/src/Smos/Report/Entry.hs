@@ -13,28 +13,43 @@ import Data.Yaml.Builder as Yaml
 import GHC.Generics (Generic)
 import Path
 import Smos.Data
-import Smos.Report.Archive
-import Smos.Report.Config
+import Smos.Directory.Archive
+import Smos.Directory.OptParse
+import Smos.Directory.ShouldPrint
+import Smos.Directory.Streaming
 import Smos.Report.Filter
 import Smos.Report.Projection
-import Smos.Report.ShouldPrint
 import Smos.Report.Sorter
-import Smos.Report.Streaming
 
-produceEntryReport :: MonadIO m => Maybe EntryFilter -> HideArchive -> ShouldPrint -> NonEmpty Projection -> Maybe Sorter -> DirectoryConfig -> m EntryReport
+produceEntryReport ::
+  (MonadIO m) =>
+  Maybe EntryFilter ->
+  HideArchive ->
+  ShouldPrint ->
+  NonEmpty Projection ->
+  Maybe Sorter ->
+  DirectorySettings ->
+  m EntryReport
 produceEntryReport ef ha sp p s dc = produceReport ha sp dc (entryReportConduit ef p s)
 
-entryReportConduit :: Monad m => Maybe EntryFilter -> NonEmpty Projection -> Maybe Sorter -> ConduitT (Path Rel File, SmosFile) void m EntryReport
+entryReportConduit ::
+  (Monad m) =>
+  Maybe EntryFilter ->
+  NonEmpty Projection ->
+  Maybe Sorter ->
+  ConduitT (Path Rel File, SmosFile) void m EntryReport
 entryReportConduit ef p s =
   makeEntryReport p . maybe id sorterSortCursorList s
-    <$> ( smosFileCursors .| smosMFilter ef .| sinkList
+    <$> ( smosFileCursors
+            .| mFilterConduit ef
+            .| sinkList
         )
 
 data EntryReport = EntryReport
   { entryReportHeaders :: NonEmpty Projection,
     entryReportCells :: [NonEmpty Projectee]
   }
-  deriving (Show, Eq, Generic)
+  deriving (Show, Generic)
 
 instance Validity EntryReport
 

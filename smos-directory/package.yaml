@@ -1,0 +1,24 @@
+name: smos-directory
+version: 0.2.0
+category: Smos
+author: Tom Sydney Kerckhove
+maintainer: syd@cs-syd.eu
+license: MIT
+
+dependencies:
+- base
+
+library:
+  source-dirs: src/
+  ghc-options: -Wall
+  dependencies:
+  - autodocodec
+  - conduit
+  - containers
+  - cursor
+  - microlens
+  - opt-env-conf
+  - path
+  - path-io
+  - smos-data
+  - validity

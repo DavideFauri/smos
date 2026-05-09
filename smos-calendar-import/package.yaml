@@ -1,11 +1,13 @@
 name: smos-calendar-import
-version: 0.5.0
+version: 0.10.0
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
 license: MIT
 
 extra-source-files:
+- documentation.txt
+- options.nix
 - test_resources/**/*
 
 dependencies:
@@ -16,30 +18,28 @@ library:
   ghc-options: -Wall
   dependencies:
     - aeson
-    - async
     - autodocodec
     - bytestring
+    - case-insensitive
+    - conformance
     - containers
-    - data-default
-    - envparse
     - http-client
     - http-client-tls
-    - iCalendar
-    - mtl
+    - ical
+    - ical-recurrence
+    - monad-logger
     - network-uri
-    - optparse-applicative
+    - opt-env-conf
     - path
     - path-io
-    - safe
+    - smos-cli
     - smos-data
-    - smos-report
+    - smos-directory
     - text
     - time
-    - time-compat
+    - unliftio
     - validity
-    - validity-containers
     - validity-text
-    - validity-time
     - yaml
 
 executables:
@@ -64,23 +64,22 @@ tests:
     - autodocodec
     - autodocodec-yaml
     - bytestring
+    - conformance-gen
     - containers
-    - data-default
+    - deepseq
     - genvalidity
-    - genvalidity-containers
     - genvalidity-sydtest
     - genvalidity-sydtest-aeson
     - genvalidity-text
-    - genvalidity-time
-    - iCalendar
+    - ical
+    - ical-gen
+    - ical-recurrence
+    - ical-recurrence-gen
+    - opt-env-conf-test
     - path
     - path-io
-    - pretty-show
-    - safe
     - smos-calendar-import
     - smos-data
     - smos-data-gen
     - sydtest
-    - text
-    - time
     - yaml

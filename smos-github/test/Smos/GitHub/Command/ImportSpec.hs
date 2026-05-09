@@ -6,6 +6,7 @@ module Smos.GitHub.Command.ImportSpec (spec) where
 
 import Data.GenValidity.Time ()
 import Data.Time
+import Data.Validity.Path ()
 import GitHub hiding (File)
 import GitHub.Data.Name
 import Path
@@ -13,7 +14,7 @@ import Smos.Data.TestUtils
 import Smos.GitHub.Command.Import
 import Smos.GitHub.Issue
 import Smos.GitHub.Issue.Gen ()
-import Smos.GitHub.OptParse.Types
+import Smos.GitHub.OptParse
 import Test.Syd
 import Test.Syd.Validity
 
@@ -114,7 +115,8 @@ spec = do
 
   describe "renderSmosProjects" $ do
     it "produces valid smosFiles" $
-      forAllValid $ producesValid3 . renderSmosProject
+      forAllValid $
+        producesValid3 . renderSmosProject
 
     let now = UTCTime (fromGregorian 2022 04 14) 36946
     it "produces the same smos file for this hypothetical issue" $

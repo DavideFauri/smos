@@ -1,11 +1,13 @@
 name: smos-server-gen
-version: 0.6.0
+version: 0.9.1
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
 license: MIT
 
 extra-source-files:
+- documentation.txt
+- options.nix
 - test_resources/**/*
 
 dependencies:
@@ -15,16 +17,15 @@ library:
   source-dirs: src/
   ghc-options: -Wall
   dependencies:
+  - QuickCheck
   - bytestring
   - containers
   - deepseq
   - dirforest
-  - genvalidity
-  - genvalidity-persistent
-  - genvalidity-time
-  - genvalidity-typed-uuid
+  - genvalidity-sydtest
   - http-client
   - mergeful
+  - microlens
   - path
   - persistent-sqlite
   - servant-auth-client
@@ -33,13 +34,13 @@ library:
   - smos-client
   - smos-data
   - smos-data-gen
-  - smos-report-gen
+  - smos-directory-gen
   - smos-server
-  - smos-sync-client
+  - smos-sync
   - sydtest
-  - sydtest-persistent-sqlite
   - sydtest-wai
   - unliftio
+  - yaml
 
 tests:
   smos-server-test:
@@ -53,32 +54,39 @@ tests:
     - -Wall
     dependencies:
     - QuickCheck
+    - async
     - bytestring
     - containers
     - dirforest
     - genvalidity-bytestring
     - genvalidity-persistent
     - genvalidity-sydtest
+    - genvalidity-time
     - http-types
+    - ical
     - mergeful
     - mtl
+    - opt-env-conf-test
     - path
     - path-io
     - persistent
+    - safe
     - servant
     - servant-client
     - smos-api
     - smos-client
     - smos-data
     - smos-data-gen
+    - smos-directory-gen
     - smos-report
-    - smos-report-gen
     - smos-server
     - smos-server-gen
     - sydtest
     - sydtest-persistent-sqlite
     - time
     - typed-uuid
+    - tz
+    - uuid
     - zip
     - zstd
 
@@ -95,7 +103,6 @@ executables:
     dependencies:
     - http-client-tls
     - http-types
-    - mtl
     - semver
     - servant-client
     - smos-client

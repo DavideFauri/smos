@@ -5,7 +5,10 @@
 module Smos.Server.TestUtils where
 
 import Control.DeepSeq
+import qualified Data.Set as S
+import Data.Word
 import Database.Persist.Sqlite as DB
+import Lens.Micro
 import qualified Network.HTTP.Client as Http
 import Servant.Auth.Client as Auth
 import Servant.Auth.Server as Auth
@@ -14,8 +17,9 @@ import Smos.Client
 import Smos.Server.Handler.Import as Server
 import Smos.Server.Looper
 import Smos.Server.Serve as Server
+import Test.QuickCheck
 import Test.Syd
-import Test.Syd.Persistent.Sqlite
+import Test.Syd.Validity
 import Test.Syd.Wai
 import UnliftIO
 
@@ -59,12 +63,7 @@ serverEnvLooper func = do
           }
   liftIO $ runLoggingT (runReaderT func env) serverEnvLogFunc
 
-serverEnvClient :: NFData a => ClientM a -> ServerTestEnvM (Either ClientError a)
-serverEnvClient func = do
-  cenv <- asks serverTestEnvClientEnv
-  liftIO $ runClient cenv func
-
-serverEnvClientOrErr :: NFData a => ClientM a -> ServerTestEnvM a
+serverEnvClientOrErr :: (NFData a) => ClientM a -> ServerTestEnvM a
 serverEnvClientOrErr func = do
   cenv <- asks serverTestEnvClientEnv
   liftIO $ testClient cenv func
@@ -74,11 +73,14 @@ withServerEnvNewUser func = do
   cenv <- asks serverTestEnvClientEnv
   withNewUser cenv func
 
-serverDBSpec :: SpecWith ConnectionPool -> Spec
-serverDBSpec = modifyMaxSuccess (`div` 10) . setupAround serverConnectionPoolSetupFunc
-
+{-# ANN serverConnectionPoolSetupFunc ("NOCOVER" :: String) #-}
 serverConnectionPoolSetupFunc :: SetupFunc ConnectionPool
-serverConnectionPoolSetupFunc = connectionPoolSetupFunc serverAutoMigration
+serverConnectionPoolSetupFunc = SetupFunc $ \func ->
+  runNoLoggingT $
+    let info = mkSqliteConnectionInfo ":memory:" & fkEnabled .~ False
+     in withSqlitePoolInfo info 1 $ \pool -> do
+          _ <- DB.runSqlPool (completeServerMigration True) pool
+          liftIO $ func pool
 
 type ServerSpec = TestDef '[Http.Manager] ClientEnv
 
@@ -93,7 +95,7 @@ serverSetupFunc' man pool = serverEnvSetupFunc pool >>= clientEnvSetupFunc man
 
 clientEnvSetupFunc :: Http.Manager -> ServerEnv -> SetupFunc ClientEnv
 clientEnvSetupFunc man env = do
-  let application = Server.makeSyncApp env
+  let application = Server.makeServerApp env
   p <- applicationSetupFunc application
   -- The fromIntegral is safe because it's PortNumber -> Int
   pure $ mkClientEnv man (BaseUrl Http "127.0.0.1" (fromIntegral p) "")
@@ -120,6 +122,7 @@ serverEnvSetupFunc pool = liftIO $ do
         serverEnvLogFunc = logFunc,
         serverEnvMaxBackupSizePerUser = Nothing,
         serverEnvAdmin = Just testAdminUsername,
+        serverEnvBookingEmailAddress = Nothing,
         serverEnvPriceCache = priceVar,
         serverEnvMonetisationSettings = Nothing
       }
@@ -152,19 +155,19 @@ testLogin cenv lf = do
     Left err -> expectationFailure $ "Failed to login: " <> show err
     Right t -> pure t
 
-withAdminUser :: MonadIO m => ClientEnv -> (Token -> m ()) -> m ()
+withAdminUser :: (MonadIO m) => ClientEnv -> (Token -> m ()) -> m ()
 withAdminUser cenv func =
   withNewGivenUser cenv testAdminRegister func
 
-withNewUser :: MonadUnliftIO m => ClientEnv -> (Token -> m ()) -> m ()
+withNewUser :: (MonadUnliftIO m) => ClientEnv -> (Token -> m ()) -> m ()
 withNewUser cenv func = withNewUserAndData cenv $ const func
 
-withNewUserAndData :: MonadUnliftIO m => ClientEnv -> (Register -> Token -> m a) -> m a
+withNewUserAndData :: (MonadUnliftIO m) => ClientEnv -> (Register -> Token -> m a) -> m a
 withNewUserAndData cenv func = do
   r <- liftIO randomRegistration
   withNewGivenUser cenv r $ func r
 
-withNewGivenUser :: MonadIO m => ClientEnv -> Register -> (Token -> m a) -> m a
+withNewGivenUser :: (MonadIO m) => ClientEnv -> Register -> (Token -> m a) -> m a
 withNewGivenUser cenv r func = do
   t <-
     liftIO $ do
@@ -172,7 +175,7 @@ withNewGivenUser cenv r func = do
       testLogin cenv (registerLogin r)
   func t
 
-withNewRegisteredUser :: MonadIO m => ClientEnv -> (Register -> m a) -> m a
+withNewRegisteredUser :: (MonadIO m) => ClientEnv -> (Register -> m a) -> m a
 withNewRegisteredUser cenv func = do
   r <- liftIO randomRegistration
   NoContent <- liftIO $ testClient cenv $ clientPostRegister r
@@ -186,9 +189,22 @@ randomRegistration = do
   let pw = uuidText u2
   pure Register {registerUsername = un, registerPassword = pw}
 
-testClient :: NFData a => ClientEnv -> ClientM a -> IO a
+testClient :: (NFData a) => ClientEnv -> ClientM a -> IO a
 testClient cenv func = do
   errOrRes <- runClient cenv func
   case errOrRes of
     Left err -> expectationFailure $ show err
     Right r -> pure r
+
+forAllBookingDuration :: (Testable t) => (BookingSettings -> Word8 -> t) -> Property
+forAllBookingDuration func =
+  forAllValid $ \bookingSettingsPrototype ->
+    forAllValid $ \minutes ->
+      let bookingSettings =
+            bookingSettingsPrototype
+              { bookingSettingAllowedDurations =
+                  S.insert
+                    minutes
+                    (bookingSettingAllowedDurations bookingSettingsPrototype)
+              }
+       in func bookingSettings minutes

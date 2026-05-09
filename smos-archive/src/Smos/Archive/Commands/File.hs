@@ -9,6 +9,7 @@ module Smos.Archive.Commands.File
     determineToFile,
     NotInWorkflowDir (..),
     destinationFile,
+    parseArchiveFileTimestamp,
     archiveTimeFormat,
     checkFromFile,
     ArchiveCheckResult (..),
@@ -23,15 +24,16 @@ where
 import Control.Monad.Catch
 import Control.Monad.Reader
 import Data.Maybe
+import qualified Data.Text as T
 import Data.Time
 import Data.Tree
 import Path
 import Path.IO
 import Smos.Archive.Env
 import Smos.Archive.OptParse
-import Smos.Archive.Prompt
+import Smos.CLI.Prompt
 import Smos.Data
-import Smos.Report.Config
+import Smos.Directory.Resolution
 import System.Exit
 import qualified System.FilePath as FP
 
@@ -50,7 +52,7 @@ determineToFile file = do
   liftIO $ destinationFile lt workflowDir archiveDir file
 
 destinationFile ::
-  MonadThrow m =>
+  (MonadThrow m) =>
   LocalTime ->
   -- | Workflow dir
   Path Abs Dir ->
@@ -71,11 +73,18 @@ destinationFile lt workflowDir archiveDir file = do
       arf'' <- maybe (pure arf') (`replaceExtension` arf') mext
       pure $ archiveDir </> arf''
 
+parseArchiveFileTimestamp :: Path abs File -> Maybe LocalTime
+parseArchiveFileTimestamp f = do
+  let name = filename f
+  let withoutExt = FP.dropExtensions (fromRelFile name)
+  let lastPart = reverse . take (length ("2025-01-28_181143" :: String)) . reverse $ withoutExt
+  parseTimeM False defaultTimeLocale archiveTimeFormat lastPart
+
 archiveTimeFormat :: String
 archiveTimeFormat = "%F_%H%M%S"
 
 data NotInWorkflowDir = NotInWorkflowDir (Path Abs Dir) (Path Abs File)
-  deriving (Show, Eq)
+  deriving (Show)
 
 instance Exception NotInWorkflowDir where
   displayException (NotInWorkflowDir workflowDir file) =
@@ -99,7 +108,10 @@ checkFromFile from = do
     Nothing -> CheckFileToArchiveDoesNotExist
     Just (Left err) -> CheckNotASmosFile err
     Just (Right sf) ->
-      let allDone = all (maybe True todoStateIsDone . entryState) (concatMap flatten (smosFileForest sf))
+      let allDone =
+            all
+              (all (maybe True todoStateIsDone . entryState) . flatten)
+              (smosFileForest sf)
        in if allDone
             then ReadyToArchive sf
             else NotAllDone sf
@@ -112,11 +124,12 @@ dealWithArchiveCheckResult from = \case
   NotAllDone sf -> do
     res <-
       promptYesNo No $
-        unlines
-          [ unwords ["Not all entries in", fromAbsFile from, "are done."],
-            "Are you sure that you want to archive it?",
-            "All remaining non-done entries will be set to CANCELLED."
-          ]
+        T.pack $
+          unlines
+            [ unwords ["Not all entries in", fromAbsFile from, "are done."],
+              "Are you sure that you want to archive it?",
+              "All remaining non-done entries will be set to CANCELLED."
+            ]
     case res of
       Yes -> pure sf
       No -> die "Not archiving."
@@ -124,9 +137,8 @@ dealWithArchiveCheckResult from = \case
 data ArchiveMoveResult
   = MoveDestinationAlreadyExists (Path Abs File)
   | ArchivedSuccesfully
-  deriving (Show, Eq)
 
-moveToArchive :: MonadIO m => Path Abs File -> Path Abs File -> SmosFile -> m ArchiveMoveResult
+moveToArchive :: (MonadIO m) => Path Abs File -> Path Abs File -> SmosFile -> m ArchiveMoveResult
 moveToArchive from to sf = do
   ensureDir $ parent to
   e2 <- doesFileExist to

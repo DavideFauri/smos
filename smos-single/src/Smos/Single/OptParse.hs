@@ -1,109 +1,59 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Smos.Single.OptParse
-  ( module Smos.Single.OptParse,
-    module Smos.Single.OptParse.Types,
+  ( Settings (..),
+    getSettings,
   )
 where
 
-import Control.Monad
 import qualified Data.Text as T
-import Data.Version
-import qualified Env
-import Options.Applicative
-import Options.Applicative.Help.Pretty as Doc
+import OptEnvConf
 import Path
-import Paths_smos_single
+import Paths_smos_single (version)
+import Smos.CLI.OptParse
 import Smos.Data
-import qualified Smos.Report.Config as Report
-import qualified Smos.Report.OptParse as Report
-import Smos.Single.OptParse.Types
-import qualified System.Environment as System
-import System.Exit
+import Smos.Directory.OptParse
 
 getSettings :: IO Settings
-getSettings = do
-  flags <- getFlags
-  env <- getEnvironment
-  config <- getConfig flags env
-  deriveSettings (Report.flagWithRestFlags flags) (Report.envWithRestEnv env) config
-
-getConfig :: Report.FlagsWithConfigFile Flags -> Report.EnvWithConfigFile Environment -> IO (Maybe Configuration)
-getConfig f e = fmap Configuration <$> Report.getConfiguration f e
-
-deriveSettings :: Flags -> Environment -> Maybe Configuration -> IO Settings
-deriveSettings Flags {..} Environment {..} mc = do
-  setTask <-
-    case parseHeader $ T.pack $ unwords flagTaskPieces of
-      Left err -> die $ "Failed to parse header: " <> err
-      Right h -> pure h
-  setDirectorySettings <-
-    Report.combineToDirectoryConfig
-      Report.defaultDirectoryConfig
-      flagDirectoryFlags
-      envDirectoryEnvironment
-      (confDirectoryConfiguration <$> mc)
-  setTaskFile <- forM flagTaskFile parseRelFile
-  pure Settings {..}
-
-getFlags :: IO (Report.FlagsWithConfigFile Flags)
-getFlags = do
-  args <- System.getArgs
-  let result = runArgumentsParser args
-  handleParseResult result
-
-runArgumentsParser :: [String] -> ParserResult (Report.FlagsWithConfigFile Flags)
-runArgumentsParser = execParserPure prefs_ flagsParser
-  where
-    prefs_ =
-      defaultPrefs
-        { prefShowHelpOnError = True,
-          prefShowHelpOnEmpty = True
-        }
-
-flagsParser :: ParserInfo (Report.FlagsWithConfigFile Flags)
-flagsParser = info (helper <*> parseFlags) help_
-  where
-    help_ = fullDesc <> progDescDoc (Just description)
-    description :: Doc
-    description =
-      Doc.vsep $
-        map Doc.text $
-          [ "",
-            "Smos Single-task Tool version: " <> showVersion version,
+getSettings =
+  runSettingsParser version $
+    unlines $
+      concat
+        [ [ "Smos' Single-task tool",
             ""
-          ]
-            ++ writeDataVersionsHelpMessage
+          ],
+          writeDataVersionsHelpMessage
+        ]
 
-parseFlags :: Parser (Report.FlagsWithConfigFile Flags)
-parseFlags =
-  Report.parseFlagsWithConfigFile $
-    Flags
-      <$> some
-        ( strArgument
-            ( mconcat
-                [ help "The task. Pass any number of arguments and they will be interpreted as the task together.",
-                  metavar "TASK"
-                ]
-            )
-        )
-      <*> optional
-        ( strOption
-            ( mconcat
-                [ long "file",
-                  help "The file to put the task in",
-                  metavar "FILEPATH"
-                ]
-            )
-        )
-      <*> Report.parseDirectoryFlags
+data Settings = Settings
+  { setTask :: !Header,
+    setTaskFile :: !(Maybe (Path Rel File)),
+    setWorkflowDirSpec :: !WorkflowDirSpec
+  }
 
-getEnvironment :: IO (Report.EnvWithConfigFile Environment)
-getEnvironment = Env.parse (Env.header "Environment") prefixedEnvironmentParser
+instance HasParser Settings where
+  settingsParser = parseSettings
 
-prefixedEnvironmentParser :: Env.Parser Env.Error (Report.EnvWithConfigFile Environment)
-prefixedEnvironmentParser = Env.prefixed "SMOS_" environmentParser
-
-environmentParser :: Env.Parser Env.Error (Report.EnvWithConfigFile Environment)
-environmentParser = Report.envWithConfigFileParser $ Environment <$> Report.directoryEnvironmentParser
+{-# ANN parseSettings ("NOCOVER" :: String) #-}
+parseSettings :: OptEnvConf.Parser Settings
+parseSettings = withSmosConfig $ do
+  setTask <-
+    setting
+      [ help "The task. Pass any number of arguments and they will be interpreted as the task together.",
+        argument,
+        reader $ eitherReader $ parseHeader . T.pack,
+        metavar "TASK"
+      ]
+  setTaskFile <-
+    optional $
+      setting
+        [ help "The file to put the task in",
+          reader $ maybeReader parseRelFile,
+          option,
+          long "file",
+          metavar "FILE_PATH"
+        ]
+  setWorkflowDirSpec <- settingsParser
+  pure Settings {..}

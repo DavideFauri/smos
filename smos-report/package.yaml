@@ -1,5 +1,5 @@
 name: smos-report
-version: 0.9.0
+version: 0.12.0
 category: Smos
 author: Tom Sydney Kerckhove
 maintainer: syd@cs-syd.eu
@@ -12,6 +12,7 @@ library:
   source-dirs: src/
   ghc-options: -Wall
   dependencies:
+  - IntervalMap
   - aeson
   - autodocodec
   - autodocodec-yaml
@@ -19,30 +20,20 @@ library:
   - containers
   - cursor
   - deepseq
-  - envparse
-  - hashable
+  - dlist
   - megaparsec
   - microlens
-  - optparse-applicative
+  - opt-env-conf
   - parsec
   - path
-  - path-io
   - pretty-show
   - safe
   - smos-data
+  - smos-directory
   - text
   - time
+  - tz
   - validity
   - validity-path
   - validity-time
   - yaml
-
-tests:
-  smos-report-dummy-test:
-    main: Spec.hs
-    source-dirs: test
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-

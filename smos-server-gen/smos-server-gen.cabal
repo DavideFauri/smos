@@ -1,17 +1,24 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.7.
+-- This file has been generated from package.yaml by hpack version 0.38.3.
 --
 -- see: https://github.com/sol/hpack
 
 name:           smos-server-gen
-version:        0.6.0
+version:        0.9.1
 category:       Smos
 author:         Tom Sydney Kerckhove
 maintainer:     syd@cs-syd.eu
 license:        MIT
 build-type:     Simple
 extra-source-files:
+    documentation.txt
+    options.nix
+    test_resources/booking/calendar.ics
+    test_resources/booking/email.html
+    test_resources/booking/email.mime
+    test_resources/booking/email.txt
+    test_resources/booking/subject.txt
     test_resources/compressed/hello-world-1.dat
     test_resources/compressed/hello-world-10.dat
     test_resources/compressed/hello-world-11.dat
@@ -38,7 +45,6 @@ extra-source-files:
 
 library
   exposed-modules:
-      Smos.Server.Gen
       Smos.Server.InterestingStore
       Smos.Server.TestUtils
   other-modules:
@@ -47,17 +53,16 @@ library
       src/
   ghc-options: -Wall
   build-depends:
-      base
+      QuickCheck
+    , base
     , bytestring
     , containers
     , deepseq
     , dirforest
-    , genvalidity
-    , genvalidity-persistent
-    , genvalidity-time
-    , genvalidity-typed-uuid
+    , genvalidity-sydtest
     , http-client
     , mergeful
+    , microlens
     , path
     , persistent-sqlite
     , servant-auth-client
@@ -66,13 +71,13 @@ library
     , smos-client
     , smos-data
     , smos-data-gen
-    , smos-report-gen
+    , smos-directory-gen
     , smos-server
-    , smos-sync-client
+    , smos-sync
     , sydtest
-    , sydtest-persistent-sqlite
     , sydtest-wai
     , unliftio
+    , yaml
   default-language: Haskell2010
 
 executable smos-server-end-to-end-test
@@ -92,7 +97,6 @@ executable smos-server-end-to-end-test
       base
     , http-client-tls
     , http-types
-    , mtl
     , semver
     , servant-client
     , smos-client
@@ -108,8 +112,11 @@ test-suite smos-server-test
       Smos.Server.DB.CompressedSpec
       Smos.Server.DBSpec
       Smos.Server.Handler.DeleteBackupSpec
+      Smos.Server.Handler.DeleteSmosFileSpec
       Smos.Server.Handler.GetApiVersionSpec
       Smos.Server.Handler.GetBackupSpec
+      Smos.Server.Handler.GetBookingSettingsSpec
+      Smos.Server.Handler.GetBookingSlotsSpec
       Smos.Server.Handler.GetListBackupsSpec
       Smos.Server.Handler.GetListSmosFilesSpec
       Smos.Server.Handler.GetMonetisationSpec
@@ -117,6 +124,7 @@ test-suite smos-server-test
       Smos.Server.Handler.GetPermissionsSpec
       Smos.Server.Handler.GetSubscriptionSpec
       Smos.Server.Handler.PostBackupSpec
+      Smos.Server.Handler.PostBookingSpec
       Smos.Server.Handler.PostLoginSpec
       Smos.Server.Handler.PostRegisterSpec
       Smos.Server.Handler.PostSyncSpec
@@ -125,6 +133,7 @@ test-suite smos-server-test
       Smos.Server.Handler.PutUserSubscriptionSpec
       Smos.Server.Looper.AutoBackupSpec
       Smos.Server.Looper.BackupGarbageCollectorSpec
+      Smos.Server.OptParseSpec
       Paths_smos_server_gen
   hs-source-dirs:
       test/
@@ -133,6 +142,7 @@ test-suite smos-server-test
       sydtest-discover:sydtest-discover
   build-depends:
       QuickCheck
+    , async
     , base
     , bytestring
     , containers
@@ -140,26 +150,32 @@ test-suite smos-server-test
     , genvalidity-bytestring
     , genvalidity-persistent
     , genvalidity-sydtest
+    , genvalidity-time
     , http-types
+    , ical
     , mergeful
     , mtl
+    , opt-env-conf-test
     , path
     , path-io
     , persistent
+    , safe
     , servant
     , servant-client
     , smos-api
     , smos-client
     , smos-data
     , smos-data-gen
+    , smos-directory-gen
     , smos-report
-    , smos-report-gen
     , smos-server
     , smos-server-gen
     , sydtest
     , sydtest-persistent-sqlite
     , time
     , typed-uuid
+    , tz
+    , uuid
     , zip
     , zstd
   default-language: Haskell2010

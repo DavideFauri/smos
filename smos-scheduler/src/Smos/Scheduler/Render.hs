@@ -4,7 +4,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Smos.Scheduler.Render where
+module Smos.Scheduler.Render
+  ( renderTemplate,
+    runRenderNow,
+    runRenderAsIfAt,
+    runRenderRaw,
+    Render,
+    RenderContext (..),
+    RenderError (..),
+    RenderValidation (..),
+    prettyRenderError,
+    renderStateHistoryTemplate,
+    renderTimeTemplateNow,
+    renderDestinationPathTemplate,
+  )
+where
 
 import Control.Monad
 import Control.Monad.Reader
@@ -18,11 +32,12 @@ import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time
+import Data.Time.Zones
 import Data.Validity
 import GHC.Generics (Generic)
 import Path
 import Smos.Data
-import Smos.Scheduler.OptParse
+import Smos.Scheduler.Schedule
 import Smos.Scheduler.Template
 import Text.Megaparsec
 
@@ -32,7 +47,8 @@ renderTemplate (ScheduleTemplate f) =
 
 renderEntryTemplate :: EntryTemplate -> Render Entry
 renderEntryTemplate EntryTemplate {..} =
-  Entry <$> renderHeaderTemplate entryTemplateHeader
+  Entry
+    <$> renderHeaderTemplate entryTemplateHeader
     <*> renderContentsTemplate entryTemplateContents
     <*> renderTimestampsTemplate entryTemplateTimestamps
     <*> renderPropertiesTemplate entryTemplateProperties
@@ -81,21 +97,11 @@ renderPropertyValueTemplate pv = do
 -- means it is explicitly set to `null`.
 renderStateHistoryTemplate :: Maybe (Maybe TodoState) -> Render StateHistory
 renderStateHistoryTemplate mts = do
-  now <- asks renderContextTime
+  now <- asks renderContextNow
   pure $
     StateHistory
-      [ mkStateHistoryEntry (zonedTimeToUTC now) (fromMaybe (Just $ TodoState "TODO") mts)
+      [ mkStateHistoryEntry now (fromMaybe (Just "TODO") mts)
       ]
-
-renderTodoStateTemplate :: TodoState -> Render TodoState
-renderTodoStateTemplate = fmap TodoState . renderTextTemplate . todoStateText
-
-renderUTCTimeTemplate :: UTCTimeTemplate -> Render UTCTime
-renderUTCTimeTemplate (UTCTimeTemplate t) = do
-  rt <- renderTextTemplate t
-  case JSON.eitherDecode (JSON.encode rt) of
-    Left err -> renderFail $ RenderErrorUTCTimeParseError t rt err
-    Right ts -> pure ts
 
 renderTagsTemplate :: Set Tag -> Render (Set Tag)
 renderTagsTemplate = fmap S.fromList . mapM renderTagTemplate . S.toList
@@ -129,23 +135,48 @@ renderPathTemplate rf = do
 
 renderTimeTemplateNow :: Template -> Render Text
 renderTimeTemplateNow (Template tps) = do
-  now <- asks renderContextTime
+  pretendTime <- asks renderContextPretendTime
   fmap T.concat $
     forM tps $ \case
       TLit t -> pure t
-      TTime t -> pure $ T.pack $ formatTime defaultTimeLocale (T.unpack t) now
+      TTime t -> pure $ T.pack $ formatTime defaultTimeLocale (T.unpack t) pretendTime
       TRelTime tt rtt -> case parse fuzzyLocalTimeP (show rtt) rtt of
         Left err -> renderFail $ RenderErrorRelativeTimeParserError rtt (errorBundlePretty err)
         Right flt ->
           pure $
-            T.pack $ case resolveLocalTime (zonedTimeToLocalTime now) flt of
+            T.pack $ case fromMaybe (BothTimeAndDay pretendTime) (resolveLocalTimeForwards pretendTime flt) of
               OnlyDaySpecified d -> formatTime defaultTimeLocale (T.unpack tt) d
               BothTimeAndDay lt -> formatTime defaultTimeLocale (T.unpack tt) lt
 
 type Render a = ReaderT RenderContext RenderValidation a
 
-runRender :: RenderContext -> Render a -> Either (NonEmpty RenderError) a
-runRender ctx func = case runReaderT func ctx of
+runRenderAsIfAt :: LocalTime -> Render a -> IO (Either (NonEmpty RenderError) a)
+runRenderAsIfAt pretendTime func = do
+  now <- getCurrentTime
+  zone <- loadLocalTZ
+  let ctx =
+        RenderContext
+          { renderContextNow = now,
+            renderContextPretendTime = pretendTime,
+            renderContextTimeZone = zone
+          }
+  pure $ runRenderRaw ctx func
+
+runRenderNow :: Render a -> IO (Either (NonEmpty RenderError) a)
+runRenderNow func = do
+  now <- getCurrentTime
+  zone <- loadLocalTZ
+  let ctx =
+        RenderContext
+          { renderContextNow = now,
+            renderContextPretendTime = utcToLocalTimeTZ zone now,
+            renderContextTimeZone = zone
+          }
+  pure $ runRenderRaw ctx func
+
+-- You probably don't want to use this, but 'runRenderNow' or 'runRenderAsIfAt' instead.
+runRenderRaw :: RenderContext -> Render a -> Either (NonEmpty RenderError) a
+runRenderRaw ctx func = case runReaderT func ctx of
   Success a -> Right a
   Failure errs -> Left errs
 
@@ -154,7 +185,7 @@ data RenderValidation a
   | Failure (NonEmpty RenderError)
   deriving (Show, Eq, Generic, Functor)
 
-instance Validity a => Validity (RenderValidation a)
+instance (Validity a) => Validity (RenderValidation a)
 
 instance Applicative RenderValidation where
   pure = Success
@@ -189,7 +220,9 @@ prettyRenderError :: RenderError -> String
 prettyRenderError = show
 
 data RenderContext = RenderContext
-  { renderContextTime :: ZonedTime
+  { renderContextNow :: !UTCTime,
+    renderContextPretendTime :: !LocalTime,
+    renderContextTimeZone :: !TZ
   }
   deriving (Show, Generic)
 

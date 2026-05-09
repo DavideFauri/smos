@@ -1,11 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Smos.Docs.Site.Changelog.TH where
 
@@ -15,25 +11,19 @@ import Data.Maybe
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time
-import GHC.Generics (Generic)
-import Instances.TH.Lift ()
 import Language.Haskell.TH.Syntax
 import Path
 import qualified System.FilePath as FP
-
-{-# ANN module ("HLint: ignore Reduce duplication" :: String) #-}
-
-deriving instance Lift Day
 
 data Changelog = Changelog
   { changelogContents :: !Text,
     changelogRendered :: !Text
   }
-  deriving (Show, Eq, Generic, Data, Typeable, Lift)
+  deriving (Typeable, Lift)
 
 unreleasedFunc :: Text -> Maybe Changelog
 unreleasedFunc contents =
-  if T.strip contents == ""
+  if T.null (T.strip contents)
     then Nothing
     else Just $ rawChangelogFunc contents
 

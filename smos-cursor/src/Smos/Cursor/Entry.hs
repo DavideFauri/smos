@@ -35,6 +35,7 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.Time
+import Data.Time.Zones
 import Data.Validity
 import GHC.Generics (Generic)
 import Lens.Micro
@@ -86,11 +87,10 @@ rebuildEntryCursor EntryCursor {..} =
       entryContents = rebuildContentsCursor <$> entryCursorContentsCursor,
       entryTimestamps = rebuildTimestampsCursor entryCursorTimestampsCursor,
       entryProperties =
-        maybe M.empty (M.fromList . NE.toList) $
-          rebuildPropertiesCursor <$> entryCursorPropertiesCursor,
+        maybe M.empty ((M.fromList . NE.toList) . rebuildPropertiesCursor) entryCursorPropertiesCursor,
       entryStateHistory = rebuildStateHistoryCursor entryCursorStateHistoryCursor,
       entryTags =
-        maybe S.empty (S.fromList . NE.toList) $ rebuildTagsCursor <$> entryCursorTagsCursor,
+        maybe S.empty ((S.fromList . NE.toList) . rebuildTagsCursor) entryCursorTagsCursor,
       entryLogbook = rebuildLogbookCursor entryCursorLogbookCursor
     }
 
@@ -180,5 +180,5 @@ instance Validity EntryCursorSelection
 
 instance NFData EntryCursorSelection
 
-entryCursorUpdateTime :: ZonedTime -> EntryCursor -> EntryCursor
-entryCursorUpdateTime zt = entryCursorTimestampsCursorL %~ fmap (timestampsCursorUpdateTime zt)
+entryCursorUpdateTime :: TZ -> UTCTime -> EntryCursor -> EntryCursor
+entryCursorUpdateTime zone now = entryCursorTimestampsCursorL %~ fmap (timestampsCursorUpdateTime zone now)
